@@ -149,76 +149,7 @@ def rerun_all():
 
 
 
-""" Read and combine csv into single files containing lengths, numsheaths, ect... """
-def read_and_comb_csv_as_SINGLES():
-    all_fibers = []
-    all_numCells = []
-    all_numShea = []
-    all_numMFLC = []
-    
-    import tkinter
-    from tkinter import filedialog
-    root = tkinter.Tk()
-    input_path = filedialog.askdirectory(parent=root, initialdir="D:/Tiger/AI stuff/RESULTS/",
-                                    title='Please select input directory')
-    input_path = input_path + '/'
 
-    all_csv = read_file_names(input_path)
-    first = 1;
-    
-    with open('Results_num_sheaths_' + output_name, 'w') as sheaths:
-        with open('Results_lengths_'+ output_name, 'w') as lengths:
-            with open('Results_cells' + output_name, 'w') as cells:
-               with open('Results_mFLC' + output_name, 'w') as mFLC:
-
-                    for T in range(len(all_csv)):
-                        
-                        filename = all_csv[T]
-                        empty = 0
-                        with open(input_path + filename, 'r') as csvfile:
-                            spamreader = csv.reader(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONNUMERIC)
-                            counter = 0
-                        
-                            for row in spamreader:
-                                print(', '.join(row))
-                                
-                                row = list(filter(lambda a: a != '[]', row))
-                                
-                                if first == 1 and not row and counter == 0:
-                                    print('skip')
-                                    empty = 1
-                                    break
-                                
-                                if counter % 2 != 0 or not row:
-                                    counter = counter + 1
-                                    continue
-                                
-                                for t in range(len(row)):
-                                    if row[t] == '[]' or not row[t] :
-                                        continue
-                                    row[t] =  float(row[t])
-
-                                if row[0] and counter == 0:   all_fibers.append(row); wr = csv.writer(lengths, quoting=csv.QUOTE_ALL); wr.writerow(all_fibers[0]);
-
-                                elif row[0] and counter == 2: all_numCells.append(row); wr = csv.writer(cells, quoting=csv.QUOTE_ALL); wr.writerow(all_numCells[0]);
-
-                                elif row[0] and counter == 4: all_numShea.append(row); wr = csv.writer(sheaths, quoting=csv.QUOTE_ALL); wr.writerow(all_numShea[0]);
-
-                                elif row[0] and counter == 6: all_numMFLC.append(row); wr = csv.writer(mFLC, quoting=csv.QUOTE_ALL); wr.writerow(all_numMFLC[0]);
-
-
-                                all_fibers = []
-                                all_numCells = []
-                                all_numShea = []
-                                all_numMFLC = []
-
-                                
-                                if counter == 6:
-                                    break
-                                counter = counter + 1
-                            
-                        if not empty:
-                            first = 0    
 
 
 """ Read and combine csv """

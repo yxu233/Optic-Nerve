@@ -39,10 +39,14 @@ tf.set_random_seed(1); numpy.random.seed(1)
 
 """  Network Begins:
 """
-# for saving
-s_path = 'J:/DATA_2017-2018/Optic_nerve/EAE_miR_AAV2/2018.08.07/ON_11/Checkpoints/'
-# for input
-input_path = 'J:/DATA_2017-2018/Optic_nerve/EAE_miR_AAV2/2018.08.07/ON_11/Training Data/'
+## for saving
+#s_path = 'J:/DATA_2017-2018/Optic_nerve/EAE_miR_AAV2/2018.08.07/ON_11/Checkpoints/3rd_run_SHOWCASE/'
+s_path = 'C:/Users/Neuroimmunology Unit/Documents/GitHub/Optic Nerve/Checkpoints/1st_OPTIC_NERVE_run_full_dataset/'
+
+## for input
+#input_path = 'J:/DATA_2017-2018/Optic_nerve/EAE_miR_AAV2/2018.08.07/ON_11/Training Data/'
+input_path = 'C:/Users/Neuroimmunology Unit/Documents/GitHub/Optic Nerve/Training Data/'
+
 
 """ load mean and std """  
 mean_arr = load_pkl('', 'mean_arr.pkl')
@@ -69,7 +73,7 @@ weight_matrix = tf.placeholder('float32', shape=[None, 1024, 1024, 2], name = 'w
 
 
 """ Creates network and cost function"""
-y, y_b, L1, L2, L3, L4, L5, L6, L7, L8, L9, L9_conv, L10, L11, logits, softMaxed = create_network(x, y_, training)
+y, y_b, L1, L2, L3, L4, L5, L6, L7, L8, L9, L9_conv, L10, L11, logits, softMaxed = create_network_SMALL(x, y_, training)
 accuracy, jaccard, train_step, cross_entropy, loss, cross_entropy, original = costOptm(y, y_b, logits, weight_matrix, weight_mat=True)
 
 sess = tf.InteractiveSession()
@@ -127,7 +131,7 @@ else:
 # Required to initialize all
 
 
-batch_size = 2; 
+batch_size = 4; 
 save_epoch = 1000;
 plot_every = 10;
 epochs = num_check;
@@ -136,42 +140,36 @@ batch_x = []; batch_y = [];
 weights = [];
 
 for P in range(8000000000000000000000):
-    np.random.shuffle(validation_counter)
+
     np.random.shuffle(input_counter)
     for i in range(len(input_counter)):
         
         input_name = examples[input_counter[i]]['input']
         input_im = np.asarray(Image.open(input_name), dtype=np.float32)
         
-        truth_name = examples[input_counter[i]]['truth']
-        truth_tmp = np.asarray(Image.open(truth_name), dtype=np.float32)
-    
         """ maybe remove normalization??? """
         input_im = normalize_im(input_im, mean_arr, std_arr) 
         
+        truth_name = examples[input_counter[i]]['truth']
+        truth_tmp = np.asarray(Image.open(truth_name), dtype=np.float32)
+                  
         """ convert truth to 2 channel image """
-        if truth_tmp.any():
-            channel_1 = np.copy(truth_tmp)
-            channel_1[channel_1 == 255] = 1
-            
-            channel_2 = np.copy(truth_tmp)
-            channel_2[channel_2 == 0] = 1
-            channel_2[channel_2 == 255] = 0
-
-        else:  # if BLANK image, everything is zero already
-            channel_1 = np.copy(truth_tmp)
-            channel_1[channel_1 == 0] = 1
-            
-            channel_2 = np.copy(truth_tmp)
-            
-        truth_im = np.zeros(np.shape(truth_tmp) + (2,))
-        truth_im[:, :, 0] = channel_1   # background
-        truth_im[:, :, 1] = channel_2   # blebs
-
-        blebs_label = np.copy(truth_im[:, :, 1])
+        channel_1 = np.copy(truth_tmp)
+        channel_1[channel_1 == 0] = 1
+        channel_1[channel_1 == 255] = 0
+                
+        channel_2 = np.copy(truth_tmp)
+        channel_2[channel_2 == 255] = 1   
         
+        truth_im = np.zeros(np.shape(truth_tmp) + (2,))
+        truth_im[:, :, 0] = channel_2   # background
+        truth_im[:, :, 1] = channel_1   # blebs
+            
+        blebs_label = np.copy(truth_im[:, :, 1])
+
         """ Get spatial AND class weighting mask for truth_im """
         sp_weighted_labels = spatial_weight(blebs_label,edgeFalloff=10,background=0.01,approximate=True)
+
         
         """ OR DO class weighting ONLY """
         #c_weighted_labels = class_weight(blebs_label, loss, weight=10.0)        
@@ -185,14 +183,7 @@ for P in range(8000000000000000000000):
         batch_y.append(truth_im)
         weights.append(weighted_labels)
                 
-        """ Plot for debug """
-#        plt.figure(1); 
-#        plt.subplot(221); plt.imshow(np.asarray(input_im, dtype = np.uint8)); plt.title('Input');
-#        plt.subplot(222); plt.imshow(sp_weighted_labels); plt.title('weighted');    plt.pause(0.005)
-#        plt.subplot(223); plt.imshow(channel_1); plt.title('background');
-#        plt.subplot(224); plt.imshow(channel_2); plt.title('blebs');
-
-    
+        
         """ Feed into training loop """
         if len(batch_x) == batch_size:
            feed_dict_TRAIN = {x:batch_x, y_:batch_y, training:1, weight_matrix:weights}                 
@@ -205,10 +196,15 @@ for P in range(8000000000000000000000):
            
            
            if epochs % plot_every == 0:
+              plt.close(1)
               plt.close(2)
+              plt.close(18)
+              plt.close(19)
+              plt.close(21)
               batch_x_val = []
               batch_y_val = []
               batch_weights_val = []
+              np.random.shuffle(validation_counter)
               for batch_i in range(len(validation_counter)):
                   """ GET VALIDATION, almost exact same as above except use validation_counter as counter"""
                   input_name = examples[validation_counter[batch_i]]['input']
@@ -219,37 +215,30 @@ for P in range(8000000000000000000000):
             
                   """ maybe remove normalization??? """
                   input_im_val = normalize_im(input_im_val, mean_arr, std_arr) 
-                
+               
                   """ convert truth to 2 channel image """
-                  if truth_tmp_val.any():
-                    channel_1 = np.copy(truth_tmp)
-                    channel_1[channel_1 == 255] = 1
-                    
-                    channel_2 = np.copy(truth_tmp_val)
-                    channel_2[channel_2 == 0] = 1
-                    channel_2[channel_2 == 255] = 0
-        
-                  else:  # if BLANK image, everything is zero already
-                    channel_1 = np.copy(truth_tmp_val)
-                    channel_1[channel_1 == 0] = 1
-                    
-                    channel_2 = np.copy(truth_tmp)
-                    
+                  channel_1 = np.copy(truth_tmp_val)
+                  channel_1[channel_1 == 0] = 1
+                  channel_1[channel_1 == 255] = 0
+                            
+                  channel_2 = np.copy(truth_tmp_val)
+                  channel_2[channel_2 == 255] = 1   
+                      
                   truth_im_val = np.zeros(np.shape(truth_tmp_val) + (2,))
-                  truth_im_val[:, :, 0] = channel_1   # background
-                  truth_im_val[:, :, 1] = channel_2   # blebs
+                  truth_im_val[:, :, 0] = channel_2   # background
+                  truth_im_val[:, :, 1] = channel_1   # blebs
         
                   blebs_label = np.copy(truth_im_val[:, :, 1])
                  
                   """ Get spatial AND class weighting mask for truth_im """
-                  sp_weighted_labels = spatial_weight(blebs_label,edgeFalloff=10,background=0.01,approximate=True)
+                  sp_weighted_labels_val = spatial_weight(blebs_label,edgeFalloff=10,background=0.01,approximate=True)
                 
                   """ OR DO class weighting ONLY """
                   #c_weighted_labels = class_weight(blebs_label, loss, weight=10.0)        
                 
                   """ Create a matrix of weighted labels """
                   weighted_labels_val = np.copy(truth_im_val)
-                  weighted_labels_val[:, :, 1] = sp_weighted_labels
+                  weighted_labels_val[:, :, 1] = sp_weighted_labels_val
                 
                   """ set inputs and truth """
                   batch_x_val.append(input_im_val)
@@ -281,8 +270,11 @@ for P in range(8000000000000000000000):
               """ function call to plot """
               plot_cost_fun(plot_cost, plot_cost_val)
               plot_jaccard_fun(plot_jaccard, plot_jaccard_val)
-             
-                
+              
+              plt.figure(18); plt.savefig(s_path + 'global_loss.png')
+              plt.figure(19); plt.savefig(s_path + 'detailed_loss.png')
+              plt.figure(21); plt.savefig(s_path + 'jaccard.png')
+
               """ Plot for debug """
               batch_x.append(input_im); batch_y.append(truth_im); weights.append(weighted_labels);
               feed_dict = {x:batch_x, y_:batch_y, training:1, weight_matrix:weights}  
@@ -295,12 +287,19 @@ for P in range(8000000000000000000000):
               output_val = softMaxed.eval(feed_dict=feed_dict)
               seg_val = np.argmax(output_val, axis = -1)[0]    
               
-              plt.figure(2);
-              plt.subplot(221); plt.imshow(truth_tmp); plt.title('Truth Train');
-              plt.subplot(222); plt.imshow(seg_train); plt.title('Output Train');              
-              plt.subplot(223); plt.imshow(truth_tmp_val); plt.title('Truth Validation');        
-              plt.subplot(224); plt.imshow(seg_val); plt.title('Output Validation'); plt.pause(0.0005);
               
+              plt.figure(num=2, figsize=(10, 10), dpi=80, facecolor='w', edgecolor='k')
+              plt.subplot(331); plt.imshow(truth_im[:, :, 1]); plt.title('Truth Train');
+              plt.subplot(332); plt.imshow(seg_train); plt.title('Output Train');              
+              plt.subplot(334); plt.imshow(truth_im_val[:, :, 1]); plt.title('Truth Validation');        
+              plt.subplot(335); plt.imshow(seg_val); plt.title('Output Validation'); plt.pause(0.0005);
+
+              #plt.subplot(333); plt.imshow(np.asarray(input_im, dtype = np.uint8)); plt.title('Input');
+              plt.subplot(333); plt.imshow(sp_weighted_labels); plt.title('weighted');    plt.pause(0.005)
+              plt.subplot(336); plt.imshow(truth_im[:, :, 0]); plt.title('Ch1: background');
+              plt.subplot(339); plt.imshow(truth_im[:, :, 1]); plt.title('Ch2: blebs');       
+              plt.pause(0.05)
+
               
               if epochs > 500:
                   if epochs % 500 == 0:
