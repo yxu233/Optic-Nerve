@@ -117,7 +117,7 @@ def plot_cost_fun(plot_cost, plot_cost_val, plot_cost_val_NO=None):
       plt.ylabel('Loss'); plt.xlabel('Epochs'); plt.pause(0.05)
       
       # cross-validation
-      plt.figure(18); plt.plot(plot_cost_val, label='Cross_validation'); plt.pause(0.05)
+      plt.figure(18); plt.plot(plot_cost_val, label='Validation'); plt.pause(0.05)
       plt.legend(loc='upper left');    
       
       """ Graph detailed plot
@@ -140,13 +140,13 @@ def plot_cost_fun(plot_cost, plot_cost_val, plot_cost_val_NO=None):
       plt.close(19);
       x_idx = list(range(start, last_loss))
       plt.figure(19); plt.plot(x_idx,plot_cost[start:last_loss], label='Training'); plt.title("Detailed Loss"); 
-      plt.figure(19); plt.plot(x_idx,plot_cost_val[start:last_loss],label='Cross_validation');
+      plt.figure(19); plt.plot(x_idx,plot_cost_val[start:last_loss],label='Validation');
       plt.legend(loc='upper left');             
       plt.ylabel('Loss'); plt.xlabel('Epochs'); plt.pause(0.05)    
       
       if plot_cost_val_NO is not None:
-            plt.figure(18); plt.plot(plot_cost_val_NO, label='Cross_validation_NO'); plt.pause(0.05)                                      
-            plt.figure(19); plt.plot(x_idx, plot_cost_val_NO[start:last_loss], label='Cross_validation_NO');   plt.pause(0.05)    
+            plt.figure(18); plt.plot(plot_cost_val_NO, label='Validation_NO'); plt.pause(0.05)                                      
+            plt.figure(19); plt.plot(x_idx, plot_cost_val_NO[start:last_loss], label='Validation_NO');   plt.pause(0.05)    
       
         
 """ Plots global and detailed cost functions
@@ -158,7 +158,7 @@ def plot_jaccard_fun(plot_jaccard, plot_jaccard_val=False):
       plt.figure(21); plt.clf();
       plt.plot(plot_jaccard, label='Jaccard'); plt.title('Jaccard')  
       if plot_jaccard_val:
-          plt.plot(plot_jaccard_val, label='Cross Validation Jaccard');
+          plt.plot(plot_jaccard_val, label='Validation Jaccard');
       plt.ylabel('Jaccard'); plt.xlabel('Epochs');            
       plt.legend(loc='upper left');    plt.pause(0.05)
       
@@ -174,7 +174,7 @@ def plot_overlay(plot_cost, plot_cost_val, plot_jaccard, plot_cost_val_NO=None):
       plt.ylabel('Loss'); plt.xlabel('Epochs'); plt.pause(0.05)
       
       # cross-validation
-      plt.figure(18); plt.plot(plot_cost_val, label='Cross_validation_NO_W'); plt.pause(0.05)
+      plt.figure(18); plt.plot(plot_cost_val, label='Validation_NO_W'); plt.pause(0.05)
       plt.legend(loc='upper left');    
       
       """ Graph detailed plot
@@ -198,13 +198,13 @@ def plot_overlay(plot_cost, plot_cost_val, plot_jaccard, plot_cost_val_NO=None):
       #plt.close(19);
       x_idx = list(range(start, last_loss))
       plt.figure(19); plt.plot(x_idx,plot_cost[start:last_loss], label='Training_NO_W'); plt.title("Detailed Loss"); 
-      plt.figure(19); plt.plot(x_idx,plot_cost_val[start:last_loss],label='Cross_validation_NO_W');
+      plt.figure(19); plt.plot(x_idx,plot_cost_val[start:last_loss],label='Validation_NO_W');
       plt.legend(loc='upper left');             
       plt.ylabel('Loss'); plt.xlabel('Epochs'); plt.pause(0.05)    
       
       if plot_cost_val_NO is not None:
-            plt.figure(18); plt.plot(plot_cost_val_NO, label='Cross_validation_NO'); plt.pause(0.05)                                      
-            plt.figure(19); plt.plot(x_idx, plot_cost_val_NO[start:last_loss], label='Cross_validation_NO');   plt.pause(0.05)    
+            plt.figure(18); plt.plot(plot_cost_val_NO, label='Validation_NO'); plt.pause(0.05)                                      
+            plt.figure(19); plt.plot(x_idx, plot_cost_val_NO[start:last_loss], label='Validation_NO');   plt.pause(0.05)    
       
     
       plt.figure(21); 

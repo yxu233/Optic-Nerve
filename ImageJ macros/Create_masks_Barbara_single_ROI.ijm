@@ -7,7 +7,8 @@ for (index = 0; index < roiManager("count"); index++) {
 // read in files to "filesDir"
 //dir = getDirectory("Choose a Directory");
 //dir = "J:\\DATA_2017-2018\\Optic_nerve\\EAE_miR_AAV2\\2018.08.07\\ON_11\\ROIs\\"
-dir = "C:\\Users\\Neuroimmunology Unit\\Documents\\GitHub\\Optic Nerve\\Etienne\\ROIs\\"
+//dir = "C:\\Users\\Neuroimmunology Unit\\Documents\\GitHub\\Optic Nerve\\Etienne\\ROIs\\"
+dir = "C:\\Users\\Neuroimmunology Unit\\Documents\\GitHub\\Optic Nerve\\Barbara\\ROIs\\"
 //setBatchMode(true);
 
 
