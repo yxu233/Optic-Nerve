@@ -46,8 +46,7 @@ from tkinter import filedialog
 import os
     
 
-truth = 0
-
+truth = 1
 
 root = tkinter.Tk()
 sav_dir = filedialog.askdirectory(parent=root, initialdir="/Users/Neuroimmunology Unit/Anaconda3/AI stuff/MyelinUNet/Source/",
@@ -62,13 +61,14 @@ tf.set_random_seed(1); np.random.seed(1)
 """
 ## for saving
 #s_path = 'J:/DATA_2017-2018/Optic_nerve/EAE_miR_AAV2/2018.08.07/ON_11/Checkpoints/3rd_run_SHOWCASE/'
-s_path = 'C:/Users/Neuroimmunology Unit/Documents/GitHub/Optic Nerve/Checkpoints/2nd_OPTIC_NERVE_run_full_dataset/'
-#s_path = 'C:/Users/Neuroimmunology Unit/Documents/GitHub/Optic Nerve/Checkpoints/3rd_OPTIC_NERVE_large_network/'
+s_path = './Checkpoints/2nd_OPTIC_NERVE_run_full_dataset/'
+#s_path = './Checkpoints/3rd_OPTIC_NERVE_large_network/'
 
 ## for input
 #input_path = 'J:/DATA_2017-2018/Optic_nerve/EAE_miR_AAV2/2018.08.07/ON_11/'
-input_path = 'J:/DATA_2017-2018/Optic_nerve/EAE_miR_AAV2/2018.08.16/EAE_A3/'
-#input_path = 'C:/Users/Neuroimmunology Unit/Documents/GitHub/Optic Nerve/Training Data/'
+#input_path = 'J:/DATA_2017-2018/Optic_nerve/EAE_miR_AAV2/2018.08.16/EAE_A3/'
+input_path = './2018.08.16/EAE_A3/'
+#input_path = './Training Data/'
 
 
 """ load mean and std """  
@@ -79,8 +79,8 @@ std_arr = load_pkl('', 'std_arr.pkl')
 images = glob.glob(os.path.join(input_path,'*.tif'))    # can switch this to "*truth.tif" if there is no name for "input"
 examples = [dict(input=i,truth=i.replace('.tif','truth.tif')) for i in images]
 
-#examples = [dict(input=i.replace('_truth.tif', '.tif'),truth=i) for i in images]
-
+#images = glob.glob(os.path.join(input_path,'*_pos_input.tif'))    # can switch this to "*truth.tif" if there is no name for "input"
+#examples = [dict(input=i,truth=i.replace('input.tif','truth.tif')) for i in images]
 
 # Variable Declaration
 x = tf.placeholder('float32', shape=[None, 1024, 1024, 3], name='InputImage')
@@ -98,8 +98,8 @@ sess = tf.InteractiveSession()
 
 """ TO LOAD OLD CHECKPOINT """
 saver = tf.train.Saver()
-#num_check = 279000
-num_check = 45000
+num_check = 335000
+#num_check = 45000
 checkpoint = '_' + str(num_check)
 saver.restore(sess, s_path + 'check' + checkpoint)
     
@@ -114,6 +114,7 @@ plot_jaccard = [];
 
 output_stack = [];
 output_stack_masked = [];
+all_PPV = [];
 for i in range(len(examples)):
         
         input_name = examples[i]['input']
@@ -145,6 +146,12 @@ for i in range(len(examples)):
                 truth_im = np.zeros(np.shape(truth_tmp) + (2,))
                 truth_im[:, :, 0] = channel_2   # background
                 truth_im[:, :, 1] = channel_1   # blebs
+                
+                # some reasons values are switched in Barbara's images
+                if "_BARBARA_" in truth_name:
+                    truth_im[:, :, 0] = channel_1   # background
+                    truth_im[:, :, 1] = channel_2   # blebs
+                    
             
             blebs_label = np.copy(truth_im[:, :, 1])
 
@@ -213,7 +220,6 @@ for i in range(len(examples)):
         plt.imsave(sav_dir + filename_split + '_' + str(i) + '_output_mask.tif', (seg_train), cmap='binary_r')
         
         """ Post processing """
-
         # (1) Mask the raw image with the seg output
         input_cp = np.copy(input_save)
         input_cp[seg_train == 0] = 0
@@ -230,9 +236,71 @@ for i in range(len(examples)):
         
         # clean by eroding then dilating
         #kernel = np.ones((5,5),np.uint8)
-        kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE,(5,5))
+        kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE,(2,2))
         seg_train_dil = cv.morphologyEx(np.asarray(seg_train_masked, dtype=np.uint8), cv.MORPH_OPEN, kernel)
+        #seg_train_dil = cv.erode(np.asarray(seg_train_masked, dtype=np.uint8),kernel,iterations = 1)
         plt.imsave(sav_dir + filename_split + '_' + str(i) + '_output_mask_MASKED.tif', (seg_train_dil), cmap='binary_r')
+
+
+        """ Stop """
+
+
+
+        """ Compute accuracy """
+        if truth:
+            overlap_im = seg_train_dil + truth_im[:, :, 1]
+            binary_overlap = overlap_im > 0
+            labelled = measure.label(binary_overlap)
+            cc_overlap = measure.regionprops(labelled, intensity_image=overlap_im)
+
+            """ (1) Find # True Positives identified (overlapped) """
+            masked = np.zeros(seg_train_dil.shape)
+            all_no_overlap = np.zeros(seg_train_dil.shape)
+            truth_no_overlap = np.zeros(seg_train_dil.shape)   # ALL False Negatives
+            seg_no_overlap = np.zeros(seg_train_dil.shape)     # All False Positives
+            for M in range(len(cc_overlap)):
+                overlap_val = cc_overlap[M]['MaxIntensity']
+                overlap_coords = cc_overlap[M]['coords']
+                if overlap_val > 1:    # if there is overlap
+                    for T in range(len(overlap_coords)):
+                        masked[overlap_coords[T,0], overlap_coords[T,1]] = overlap_im[overlap_coords[T,0], overlap_coords[T,1]]   # TRUE POSITIVES
+                else:  # no overlap
+                    for T in range(len(overlap_coords)):
+                        all_no_overlap[overlap_coords[T,0], overlap_coords[T,1]] = overlap_im[overlap_coords[T,0], overlap_coords[T,1]]     
+                        truth_no_overlap[overlap_coords[T,0], overlap_coords[T,1]] = overlap_im[overlap_coords[T,0], overlap_coords[T,1]]     
+                        seg_no_overlap[overlap_coords[T,0], overlap_coords[T,1]] = overlap_im[overlap_coords[T,0], overlap_coords[T,1]]     
+
+            labelled = measure.label(masked)
+            cc_masked_TPs = measure.regionprops(labelled)
+            TP = len(cc_masked_TPs)
+                     
+            labelled = measure.label(truth_no_overlap)
+            cc_truth_FNs = measure.regionprops(labelled)
+            FN = len(cc_truth_FNs)
+
+            labelled = measure.label(seg_no_overlap)
+            cc_seg_FPs = measure.regionprops(labelled)
+            FP = len(cc_seg_FPs)
+                        
+            PPV = TP/(TP + FP)
+                
+            print("PPV value for image %d is: %.3f" %(i, PPV))            
+            all_PPV.append(PPV)
+                        
+#            """ (2) Find # of False Positives (Identified by """
+#            """ part of the above cross_val"""
+#            def compute_measures(TN, FP, FN, TP):
+#                 """Computes effectiveness measures given a confusion matrix."""
+#                 PPV = TP/(TP + FP)
+#                 NPV = TN/(TN + FN)
+#                 sensitivity = TP/(TP + FN)    # true positive rate
+#                 specificity = TN/(TN + FP)    # true negative rate
+#                 accuracy = (TP + TN) / (TP + FP + FN + TN)
+#                 fmeasure = 2 * (specificity * sensitivity) / (specificity + sensitivity)
+#            
+#                 return PPV, NPV, sensitivity, specificity, accuracy, fmeasure
+                    
+                    
 
 
 
