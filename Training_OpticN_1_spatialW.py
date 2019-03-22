@@ -41,8 +41,9 @@ tf.set_random_seed(1); numpy.random.seed(1)
 """
 ## for saving
 #s_path = 'J:/DATA_2017-2018/Optic_nerve/EAE_miR_AAV2/2018.08.07/ON_11/Checkpoints/3rd_run_SHOWCASE/'
-s_path = 'C:/Users/Neuroimmunology Unit/Documents/GitHub/Optic Nerve/Checkpoints/3rd_OPTIC_NERVE_large_network/'
+#s_path = 'C:/Users/Neuroimmunology Unit/Documents/GitHub/Optic Nerve/Checkpoints/3rd_OPTIC_NERVE_large_network/'
 #s_path = 'C:/Users/Neuroimmunology Unit/Documents/GitHub/Optic Nerve/Checkpoints/2nd_OPTIC_NERVE_run_full_dataset/'
+s_path = 'C:/Users/Neuroimmunology Unit/Documents/GitHub/Optic Nerve/Checkpoints/4th_OPTIC_NERVE_4_deep_network/'
 
 
 ## for input
@@ -76,7 +77,8 @@ weight_matrix = tf.placeholder('float32', shape=[None, 1024, 1024, 2], name = 'w
 
 """ Creates network and cost function"""
 #y, y_b, L1, L2, L3, L4, L5, L6, L7, L8, L9, L9_conv, L10, L11, logits, softMaxed = create_network_SMALL(x, y_, training)
-y, y_b, L1, L2, L3, L4, L5, L6, L7, L8, L9, L9_conv, L10, L11, logits, softMaxed = create_network(x, y_, training)
+#y, y_b, L1, L2, L3, L4, L5, L6, L7, L8, L9, L9_conv, L10, L11, logits, softMaxed = create_network(x, y_, training)
+y, y_b, L1, L2, L3, L4, L5, L6, L7, L8, L9, L9_conv, L10, L11, logits, softMaxed = create_network_4_layers(x, y_, training)
 accuracy, jaccard, train_step, cross_entropy, loss, cross_entropy, original = costOptm(y, y_b, logits, weight_matrix, weight_mat=True)
 
 sess = tf.InteractiveSession()

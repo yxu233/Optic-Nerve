@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 # -*- coding: utf-8 -*-
 """
 Created on Mon Aug 27 10:25:37 2018
@@ -19,6 +21,8 @@ Created on Sunday Dec. 24th
 
 @author: Tiger
 """
+
+
 import tensorflow as tf
 from matplotlib import *
 import numpy as np
@@ -34,6 +38,8 @@ import zipfile
 import scipy
 import cv2 as cv
 
+
+
 from plot_functions import *
 from data_functions import *
 #from post_process_functions import *
@@ -46,7 +52,175 @@ from tkinter import filedialog
 import os
     
 
-truth = 1
+
+""" Convert voxel list to array """
+def convert_vox_to_matrix(voxel_idx, zero_matrix):
+    for row in voxel_idx:
+        #print(row)
+        zero_matrix[(row[0], row[1], row[2])] = 1
+    return zero_matrix
+
+""" For plotting the output as an interactive scroller"""
+class IndexTracker(object):
+    def __init__(self, ax, X):
+        self.ax = ax
+        ax.set_title('use scroll wheel to navigate images')
+
+        self.X = X
+        rows, cols, self.slices = X.shape
+        self.ind = self.slices//2
+
+        self.im = ax.imshow(self.X[:, :, self.ind])
+        self.update()
+
+    def onscroll(self, event):
+        print("%s %s" % (event.button, event.step))
+        if event.button == 'up':
+            self.ind = (self.ind + 1) % self.slices
+        else:
+            self.ind = (self.ind - 1) % self.slices
+        self.update()
+
+    def update(self):
+        self.im.set_data(self.X[:, :, self.ind])
+        ax.set_ylabel('slice %s' % self.ind)
+        self.im.axes.figure.canvas.draw()
+
+
+""" Only keeps objects in stack that are 5 slices thick!!!"""
+def slice_thresh(output_stack, slice_size=5):
+    binary_overlap = output_stack > 0
+    labelled = measure.label(binary_overlap)
+    cc_overlap = measure.regionprops(labelled)
+    
+    all_voxels = []
+    all_voxels_kept = []; total_blebs_kept = 0
+    all_voxels_elim = []; total_blebs_elim = 0
+    total_blebs_counted = len(cc_overlap)
+    for bleb in cc_overlap:
+        cur_bleb_coords = bleb['coords']
+    
+        # get only z-axis dimensions
+        z_axis_span = cur_bleb_coords[:, -1]
+    
+        min_slice = min(z_axis_span)
+        max_slice = max(z_axis_span)
+        span = max_slice - min_slice
+    
+        """ ONLY KEEP OBJECTS that span > 5 slices """
+        if span >= slice_size:
+            print("WIDE ENOUGH object") 
+            if len(all_voxels_kept) == 0:   # if it's empty, initialize
+                all_voxels_kept = cur_bleb_coords
+            else:
+                all_voxels_kept = np.append(all_voxels_kept, cur_bleb_coords, axis = 0)
+                
+            total_blebs_kept = total_blebs_kept + 1
+        else:
+            print("NOT wide enough")
+            if len(all_voxels_elim) == 0:
+                print("came here")
+                all_voxels_elim = cur_bleb_coords
+            else:
+                all_voxels_elim = np.append(all_voxels_elim, cur_bleb_coords, axis = 0)
+                
+            total_blebs_elim = total_blebs_elim + 1
+       
+        if len(all_voxels) == 0:   # if it's empty, initialize
+            all_voxels = cur_bleb_coords
+        else:
+            all_voxels = np.append(all_voxels, cur_bleb_coords, axis = 0)
+            
+    print("Total kept: " + str(total_blebs_kept) + " Total eliminated: " + str(total_blebs_elim))
+    
+    
+    """ convert voxels to matrix """
+    all_seg = convert_vox_to_matrix(all_voxels, np.zeros(output_stack.shape))
+    all_blebs = convert_vox_to_matrix(all_voxels_kept, np.zeros(output_stack.shape))
+    all_eliminated = convert_vox_to_matrix(all_voxels_elim, np.zeros(output_stack.shape))
+    
+    return all_seg, all_blebs, all_eliminated
+
+
+""" Find vectors of movement and eliminate blobs that migrate """
+def distance_thresh(all_blebs_THRESH, average_thresh=8, max_thresh=15):
+    
+    # (1) Find and plot centroid of each 2D image object:
+    centroid_matrix_3D = np.zeros(np.shape(all_blebs_THRESH))
+    for i in range(len(all_blebs_THRESH[0, 0, :])):
+        bin_cur_slice = all_blebs_THRESH[:, :, i] > 0
+        label_cur_slice = measure.label(bin_cur_slice)
+        cc_overlap_cur = measure.regionprops(label_cur_slice)
+        
+        for obj in cc_overlap_cur:
+            centroid_matrix_3D[(int(obj['centroid'][0]),) + (int(obj['centroid'][1]),) + (i,)] = 1   # the "i" puts the centroid in the correct slice!!!
+        
+        print(i)
+        
+    # (2) use 3D cc_overlap to find clusters of centroids
+    binary_overlap = all_blebs_THRESH > 0
+    labelled = measure.label(binary_overlap)
+    cc_overlap_3D = measure.regionprops(labelled)
+        
+    final_bleb_matrix = np.zeros(np.shape(all_blebs_THRESH))
+    elim_matrix = np.zeros(np.shape(all_blebs_THRESH))
+    num_elim = 0
+    num_kept = 0
+    for obj3D in cc_overlap_3D:
+        mask = np.ones(np.shape(centroid_matrix_3D))
+        obj_mask = convert_vox_to_matrix(obj3D['coords'], np.zeros(output_stack.shape))
+        mask[obj_mask == 1] = 0 
+    
+        tmp_centroids = np.copy(centroid_matrix_3D)  # contains only centroids that are masked by array above
+        tmp_centroids[mask == 1] = 0
+        
+        #bin_cur_centroids = tmp_centroids > 0
+        #label_cur_centroids = measure.label(bin_cur_centroids)
+        cc_overlap_cur_cent = measure.regionprops(np.asarray(tmp_centroids, dtype=np.int))  
+        
+        list_centroids = []
+        for centroid in cc_overlap_cur_cent:
+            if len(list_centroids) == 0:
+                print("came here")
+                list_centroids = centroid['coords']
+            else:
+                list_centroids = np.append(list_centroids, centroid['coords'], axis = 0)
+    
+        sorted_centroids = sorted(list_centroids,key=lambda x: x[2])  # sort by column 3
+    
+        # (3) Find distance from 1st - 2nd - 3rd - 4th - 5th ect... centroids
+        all_distances = []
+        for i in range(len(sorted_centroids) - 1):
+            center_1 = sorted_centroids[i]
+            center_2 = sorted_centroids[i + 1]
+            
+            # Find distance:
+            dist = math.sqrt(sum((center_1 - center_2)**2))           # DISTANCE FORMULA
+            all_distances.append(dist)
+        average_dist = sum(all_distances)/len(all_distances)
+        max_dist = max(all_distances)
+        
+        
+        # (4) If average distance is BELOW thresdhold, then keep the 3D cell body!!!
+        # OR, if max distance moved > 15 pixels
+        print("average dist is: " + str(average_dist))
+        if average_dist < average_thresh or max_dist > max_thresh:
+            obj_matrix = convert_vox_to_matrix(obj3D['coords'], np.zeros(output_stack.shape))
+            final_bleb_matrix = final_bleb_matrix + obj_matrix
+            num_kept = num_kept + 1
+        else:
+            obj_matrix = convert_vox_to_matrix(obj3D['coords'], np.zeros(output_stack.shape))
+            elim_matrix = elim_matrix + obj_matrix
+            num_elim = num_elim + 1
+    
+        print("Finished distance thresholding for: " + str(num_elim + num_kept) + " out of " + str(len(cc_overlap_3D)) + " images")
+    
+    print('Kept: ' + str(num_kept) + " eliminated: " + str(num_elim))
+    
+    return final_bleb_matrix, elim_matrix
+
+
+truth = 0
 
 root = tkinter.Tk()
 sav_dir = filedialog.askdirectory(parent=root, initialdir="/Users/Neuroimmunology Unit/Anaconda3/AI stuff/MyelinUNet/Source/",
@@ -66,8 +240,8 @@ s_path = './Checkpoints/2nd_OPTIC_NERVE_run_full_dataset/'
 
 ## for input
 #input_path = 'J:/DATA_2017-2018/Optic_nerve/EAE_miR_AAV2/2018.08.07/ON_11/'
-#input_path = 'J:/DATA_2017-2018/Optic_nerve/EAE_miR_AAV2/2018.08.16/EAE_A3/'
-input_path = './2018.08.16/EAE_A3/'
+input_path = 'J:/DATA_2017-2018/Optic_nerve/EAE_miR_AAV2/2018.08.16/EAE_A3/'
+#input_path = './2018.08.16/EAE_A3/'
 #input_path = './Training Data/'
 
 
@@ -79,8 +253,9 @@ std_arr = load_pkl('', 'std_arr.pkl')
 images = glob.glob(os.path.join(input_path,'*.tif'))    # can switch this to "*truth.tif" if there is no name for "input"
 examples = [dict(input=i,truth=i.replace('.tif','truth.tif')) for i in images]
 
-#images = glob.glob(os.path.join(input_path,'*_pos_input.tif'))    # can switch this to "*truth.tif" if there is no name for "input"
-#examples = [dict(input=i,truth=i.replace('input.tif','truth.tif')) for i in images]
+if truth:
+    images = glob.glob(os.path.join(input_path,'*_pos_input.tif'))    # can switch this to "*truth.tif" if there is no name for "input"
+    examples = [dict(input=i,truth=i.replace('input.tif','truth.tif')) for i in images]
 
 # Variable Declaration
 x = tf.placeholder('float32', shape=[None, 1024, 1024, 3], name='InputImage')
@@ -98,7 +273,7 @@ sess = tf.InteractiveSession()
 
 """ TO LOAD OLD CHECKPOINT """
 saver = tf.train.Saver()
-num_check = 335000
+num_check = 365000
 #num_check = 45000
 checkpoint = '_' + str(num_check)
 saver.restore(sess, s_path + 'check' + checkpoint)
@@ -115,6 +290,7 @@ plot_jaccard = [];
 output_stack = [];
 output_stack_masked = [];
 all_PPV = [];
+input_im_stack = [];
 for i in range(len(examples)):
         
         input_name = examples[i]['input']
@@ -221,28 +397,24 @@ for i in range(len(examples)):
         
         """ Post processing """
         # (1) Mask the raw image with the seg output
-        input_cp = np.copy(input_save)
-        input_cp[seg_train == 0] = 0
+        #input_cp = np.copy(input_save)
+        #input_cp[seg_train == 0] = 0
         
         # convert to SINGLE channel + uint8, then apply threshold
-        input_cp = np.asarray(input_cp[:, :, 1], dtype=np.uint8)
-        th2 = cv.adaptiveThreshold(input_cp,255,cv.ADAPTIVE_THRESH_MEAN_C,\
-            cv.THRESH_BINARY,11,2)
+        #input_cp = np.asarray(input_cp[:, :, 1], dtype=np.uint8)
+        #th2 = cv.adaptiveThreshold(input_cp,255,cv.ADAPTIVE_THRESH_MEAN_C,\
+        #    cv.THRESH_BINARY,11,2)
         #ret,thresh1 = cv.threshold(input_cp,0,255,cv.THRESH_BINARY+cv.THRESH_OTSU)
 
         # use thresholded mask to set things to zero in the original seg output
-        seg_train_masked = np.copy(seg_train)
-        seg_train_masked[th2 == 0] = 0
+        #seg_train_masked = np.copy(seg_train)
+        #seg_train_masked[th2 == 0] = 0
         
         # clean by eroding then dilating
         #kernel = np.ones((5,5),np.uint8)
-        kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE,(2,2))
-        seg_train_dil = cv.morphologyEx(np.asarray(seg_train_masked, dtype=np.uint8), cv.MORPH_OPEN, kernel)
-        #seg_train_dil = cv.erode(np.asarray(seg_train_masked, dtype=np.uint8),kernel,iterations = 1)
-        plt.imsave(sav_dir + filename_split + '_' + str(i) + '_output_mask_MASKED.tif', (seg_train_dil), cmap='binary_r')
-
-
-        """ Stop """
+        #kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE,(2,2))
+        #seg_train_dil = cv.morphologyEx(np.asarray(seg_train_masked, dtype=np.uint8), cv.MORPH_OPEN, kernel)
+        #plt.imsave(sav_dir + filename_split + '_' + str(i) + '_output_mask_MASKED.tif', (seg_train_dil), cmap='binary_r')
 
 
 
@@ -284,7 +456,7 @@ for i in range(len(examples)):
                         
             PPV = TP/(TP + FP)
                 
-            print("PPV value for image %d is: %.3f" %(i, PPV))            
+            print("PPV value for image %d is: %.3f" %(i + 1, PPV))            
             all_PPV.append(PPV)
                         
 #            """ (2) Find # of False Positives (Identified by """
@@ -307,25 +479,91 @@ for i in range(len(examples)):
         """ Save as 3D stack """
         if len(output_stack) == 0:
             output_stack = seg_train
-            output_stack_masked = seg_train_masked
+            #output_stack_masked = seg_train_masked
+            input_im_stack = input_save[:, :, 1]
         else:
             output_stack = np.dstack([output_stack, seg_train])
-            output_stack_masked = np.dstack([output_stack_masked, seg_train_masked])
+            #output_stack_masked = np.dstack([output_stack_masked, seg_train_masked])
+            input_im_stack = np.dstack([input_im_stack, input_save[:, :, 1]])
 
 
+
+""" Pre-processing """
+# 1) get more data (and good data)
+# 2) overlay seg masks and binarize to get better segmentations???
+
+    
 """ Post-processing """
+""" (1) removes all things that do not appear in > 5 slices!!!"""
+all_seg, all_blebs, all_eliminated = slice_thresh(output_stack, slice_size=5)
 
-# 1) delete anything that "migrates" between frames (i.e. identified a sheath by accident) ==> then use to train on 3D images???
-# 2) use outputs as masks over top of the raw image. Then BINARIZE to get a better segmentation of the output image!!!
-#        ==> may need to do this b/c the ground truth is over-segmented!!!
-#        ***can use parameters # 1 and 2 to clean images and then used cleaned images to re-train 3D model!!!
-
-
-
-
-
-
+# Save output as individual .tiffs so can do stack later in imageJ
+for i in range(len(output_stack[0, 0, :])):
+    print("Printing post-processed output: " + str(i) + " of total: " + str(len(output_stack[0, 0, :])))
+    plt.imsave(sav_dir + filename_split + '_' + str(i) + '_ORIGINAL_post-processed.tif', (all_seg[:, :, i]), cmap='binary_r')
+    plt.imsave(sav_dir + filename_split + '_' + str(i) + '_BLEBS_post-processed.tif', (all_blebs[:, :, i]), cmap='binary_r')
+    plt.imsave(sav_dir + filename_split + '_' + str(i) + '_ELIM_post-processed.tif', (all_eliminated[:, :, i]), cmap='binary_r')
 
 
+""" (2) DO THRESHOLDING TO SHRINK SEGMENTATION SIZE, but do THRESH ON 3D array!!! """
+save_input_im_stack = np.copy(input_im_stack)
+input_im_stack[all_blebs == 0] = 0     # FIRST MASK THE ORIGINAL IMAGE
 
+# then do thresholding
+from skimage import filters
+val = filters.threshold_otsu(input_im_stack)
+mask = input_im_stack > val
+
+# closes image to make less noisy """
+kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE,(3,3))
+blebs_opened_masked = cv.morphologyEx(np.asarray(mask, dtype=np.uint8), cv.MORPH_CLOSE, kernel)
+
+
+""" apply slice THRESH again"""
+all_seg_THRESH, all_blebs_THRESH, all_eliminated_THRESH = slice_thresh(blebs_opened_masked, slice_size=5)
+# Save output as individual .tiffs so can do stack later in imageJ
+for i in range(len(output_stack[0, 0, :])):
+    print("Printing post-processed output: " + str(i) + " of total: " + str(len(output_stack[0, 0, :])))
+    plt.imsave(sav_dir + filename_split + '_' + str(i) + '_THRESH_and_SLICED_post-processed.tif', (all_blebs_THRESH[:, :, i]), cmap='binary_r')
+    
+
+""" (3) Find vectors of movement and eliminate blobs that migrate """
+final_bleb_matrix, elim_matrix = distance_thresh(all_blebs_THRESH, average_thresh=8, max_thresh=15)
+
+# Save output as individual .tiffs so can do stack later in imageJ
+for i in range(len(output_stack[0, 0, :])):
+    print("Printing post-processed output: " + str(i) + " of total: " + str(len(output_stack[0, 0, :])))
+    plt.imsave(sav_dir + filename_split + '_' + str(i) + '_DISTANCE_THRESHED_8px_post-processed.tif', (final_bleb_matrix[:, :, i]), cmap='binary_r')
+    plt.imsave(sav_dir + filename_split + '_' + str(i) + '_DISTANCE_THRESHED_8px_elimed_post-processed.tif', (elim_matrix[:, :, i]), cmap='binary_r')
+
+
+""" Pseudo-local thresholding (applies Otsu to each individual bleb) """
+#binary_overlap = all_blebs_THRESH > 0
+#labelled = measure.label(binary_overlap)
+#cc_overlap = measure.regionprops(labelled)
+#
+#total_blebs = 0
+#pseudo_threshed_stack = np.zeros(np.shape(input_im_stack))
+#for bleb in cc_overlap:
+#    cur_bleb_coords = bleb['coords']
+#    cur_bleb_mask = convert_vox_to_matrix(cur_bleb_coords, np.zeros(output_stack.shape))
+#    
+#    val = filters.threshold_otsu(cur_bleb_mask)
+#    mask = cur_bleb_mask > val    
+#    
+#    pseudo_threshed_stack = pseudo_threshed_stack + mask
+#
+#    total_blebs = total_blebs + 1    
+#        
+#    print("Total analyzed: " + str(total_blebs) + "of total blebs: " + str(len(cc_overlap)))
+    
+
+
+
+
+""" Plotting as interactive scroller """
+fig, ax = plt.subplots(1, 1)
+tracker = IndexTracker(ax, elim_matrix)
+fig.canvas.mpl_connect('scroll_event', tracker.onscroll)
+plt.show()
 
