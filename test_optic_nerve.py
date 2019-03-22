@@ -143,7 +143,7 @@ def slice_thresh(output_stack, slice_size=5):
 
 
 """ Find vectors of movement and eliminate blobs that migrate """
-def distance_thresh(all_blebs_THRESH, average_thresh=8, max_thresh=15):
+def distance_thresh(all_blebs_THRESH, average_thresh=15, max_thresh=15):
     
     # (1) Find and plot centroid of each 2D image object:
     centroid_matrix_3D = np.zeros(np.shape(all_blebs_THRESH))
@@ -155,38 +155,63 @@ def distance_thresh(all_blebs_THRESH, average_thresh=8, max_thresh=15):
         for obj in cc_overlap_cur:
             centroid_matrix_3D[(int(obj['centroid'][0]),) + (int(obj['centroid'][1]),) + (i,)] = 1   # the "i" puts the centroid in the correct slice!!!
         
-        print(i)
+        #print(i)
         
     # (2) use 3D cc_overlap to find clusters of centroids
     binary_overlap = all_blebs_THRESH > 0
     labelled = measure.label(binary_overlap)
     cc_overlap_3D = measure.regionprops(labelled)
         
-    final_bleb_matrix = np.zeros(np.shape(all_blebs_THRESH))
-    elim_matrix = np.zeros(np.shape(all_blebs_THRESH))
-    num_elim = 0
-    num_kept = 0
+    all_voxels_kept = []; num_kept = 0
+    all_voxels_elim = []; num_elim = 0
     for obj3D in cc_overlap_3D:
-        mask = np.ones(np.shape(centroid_matrix_3D))
-        obj_mask = convert_vox_to_matrix(obj3D['coords'], np.zeros(output_stack.shape))
+        
+        slice_idx = np.unique(obj3D['coords'][:, -1])
+        
+        cropped_centroid_matrix = centroid_matrix_3D[:, :, min(slice_idx) : max(slice_idx) + 1]
+        
+        mask = np.ones(np.shape(cropped_centroid_matrix))
+
+        translate_z_coords = obj3D['coords'][:, 0:2]
+        z_coords = obj3D['coords'][:, 2:3]  % min(slice_idx)   # TRANSLATES z-coords to 0 by taking modulo of smallest slice index!!!
+        translate_z_coords = np.append(translate_z_coords, z_coords, -1)
+        
+        obj_mask = convert_vox_to_matrix(translate_z_coords, np.zeros(cropped_centroid_matrix.shape))
         mask[obj_mask == 1] = 0 
-    
-        tmp_centroids = np.copy(centroid_matrix_3D)  # contains only centroids that are masked by array above
+
+        tmp_centroids = np.copy(cropped_centroid_matrix)  # contains only centroids that are masked by array above
         tmp_centroids[mask == 1] = 0
         
-        #bin_cur_centroids = tmp_centroids > 0
-        #label_cur_centroids = measure.label(bin_cur_centroids)
+        
+        ##mask = np.ones(np.shape(centroid_matrix_3D))
+        ##obj_mask = convert_vox_to_matrix(obj3D['coords'], np.zeros(output_stack.shape))
+        ##mask[obj_mask == 1] = 0 
+    
+        ##tmp_centroids = np.copy(centroid_matrix_3D)  # contains only centroids that are masked by array above
+        ##tmp_centroids[mask == 1] = 0
+        
         cc_overlap_cur_cent = measure.regionprops(np.asarray(tmp_centroids, dtype=np.int))  
         
         list_centroids = []
         for centroid in cc_overlap_cur_cent:
             if len(list_centroids) == 0:
-                print("came here")
                 list_centroids = centroid['coords']
             else:
                 list_centroids = np.append(list_centroids, centroid['coords'], axis = 0)
     
         sorted_centroids = sorted(list_centroids,key=lambda x: x[2])  # sort by column 3
+        
+        
+        """ Any object with only 1 or less centroids is considered BAD, and is eliminated"""
+        if len(sorted_centroids) <= 1:
+            num_elim = num_elim + 1
+            
+            if len(all_voxels_elim) == 0:   # if it's empty, initialize
+                all_voxels_elim = obj3D['coords']
+            else:
+                all_voxels_elim = np.append(all_voxels_elim, obj3D['coords'], axis = 0)
+            continue;
+        
     
         # (3) Find distance from 1st - 2nd - 3rd - 4th - 5th ect... centroids
         all_distances = []
@@ -196,6 +221,7 @@ def distance_thresh(all_blebs_THRESH, average_thresh=8, max_thresh=15):
             
             # Find distance:
             dist = math.sqrt(sum((center_1 - center_2)**2))           # DISTANCE FORMULA
+            #print(dist)
             all_distances.append(dist)
         average_dist = sum(all_distances)/len(all_distances)
         max_dist = max(all_distances)
@@ -203,18 +229,26 @@ def distance_thresh(all_blebs_THRESH, average_thresh=8, max_thresh=15):
         
         # (4) If average distance is BELOW thresdhold, then keep the 3D cell body!!!
         # OR, if max distance moved > 15 pixels
-        print("average dist is: " + str(average_dist))
-        if average_dist < average_thresh or max_dist > max_thresh:
-            obj_matrix = convert_vox_to_matrix(obj3D['coords'], np.zeros(output_stack.shape))
-            final_bleb_matrix = final_bleb_matrix + obj_matrix
+        #print("average dist is: " + str(average_dist))
+        if average_dist < average_thresh or max_dist < max_thresh:
+            if len(all_voxels_kept) == 0:   # if it's empty, initialize
+                all_voxels_kept = obj3D['coords']
+            else:
+                all_voxels_kept = np.append(all_voxels_kept, obj3D['coords'], axis = 0)
+            
             num_kept = num_kept + 1
         else:
-            obj_matrix = convert_vox_to_matrix(obj3D['coords'], np.zeros(output_stack.shape))
-            elim_matrix = elim_matrix + obj_matrix
             num_elim = num_elim + 1
-    
+            
+            if len(all_voxels_elim) == 0:   # if it's empty, initialize
+                all_voxels_elim = obj3D['coords']
+            else:
+                all_voxels_elim = np.append(all_voxels_elim, obj3D['coords'], axis = 0)
+            
         print("Finished distance thresholding for: " + str(num_elim + num_kept) + " out of " + str(len(cc_overlap_3D)) + " images")
     
+    final_bleb_matrix = convert_vox_to_matrix(all_voxels_kept, np.zeros(all_blebs_THRESH.shape))
+    elim_matrix = convert_vox_to_matrix(all_voxels_elim, np.zeros(all_blebs_THRESH.shape))
     print('Kept: ' + str(num_kept) + " eliminated: " + str(num_elim))
     
     return final_bleb_matrix, elim_matrix
@@ -497,12 +531,15 @@ for i in range(len(examples)):
 """ (1) removes all things that do not appear in > 5 slices!!!"""
 all_seg, all_blebs, all_eliminated = slice_thresh(output_stack, slice_size=5)
 
+
+filename_split = filename_split.split('_z')[0]
+
 # Save output as individual .tiffs so can do stack later in imageJ
 for i in range(len(output_stack[0, 0, :])):
     print("Printing post-processed output: " + str(i) + " of total: " + str(len(output_stack[0, 0, :])))
-    plt.imsave(sav_dir + filename_split + '_' + str(i) + '_ORIGINAL_post-processed.tif', (all_seg[:, :, i]), cmap='binary_r')
-    plt.imsave(sav_dir + filename_split + '_' + str(i) + '_BLEBS_post-processed.tif', (all_blebs[:, :, i]), cmap='binary_r')
-    plt.imsave(sav_dir + filename_split + '_' + str(i) + '_ELIM_post-processed.tif', (all_eliminated[:, :, i]), cmap='binary_r')
+    plt.imsave(sav_dir + filename_split + '_z' + str(i) + '_ORIGINAL_post-processed.tif', (all_seg[:, :, i]), cmap='binary_r')
+    plt.imsave(sav_dir + filename_split + '_z' + str(i) + '_BLEBS_post-processed.tif', (all_blebs[:, :, i]), cmap='binary_r')
+    plt.imsave(sav_dir + filename_split + '_z' + str(i) + '_ELIM_post-processed.tif', (all_eliminated[:, :, i]), cmap='binary_r')
 
 
 """ (2) DO THRESHOLDING TO SHRINK SEGMENTATION SIZE, but do THRESH ON 3D array!!! """
@@ -524,17 +561,17 @@ all_seg_THRESH, all_blebs_THRESH, all_eliminated_THRESH = slice_thresh(blebs_ope
 # Save output as individual .tiffs so can do stack later in imageJ
 for i in range(len(output_stack[0, 0, :])):
     print("Printing post-processed output: " + str(i) + " of total: " + str(len(output_stack[0, 0, :])))
-    plt.imsave(sav_dir + filename_split + '_' + str(i) + '_THRESH_and_SLICED_post-processed.tif', (all_blebs_THRESH[:, :, i]), cmap='binary_r')
+    plt.imsave(sav_dir + filename_split + '_z' + str(i) + '_THRESH_and_SLICED_post-processed.tif', (all_blebs_THRESH[:, :, i]), cmap='binary_r')
     
 
 """ (3) Find vectors of movement and eliminate blobs that migrate """
-final_bleb_matrix, elim_matrix = distance_thresh(all_blebs_THRESH, average_thresh=8, max_thresh=15)
+final_bleb_matrix, elim_matrix = distance_thresh(all_blebs_THRESH, average_thresh=15, max_thresh=15)
 
 # Save output as individual .tiffs so can do stack later in imageJ
 for i in range(len(output_stack[0, 0, :])):
     print("Printing post-processed output: " + str(i) + " of total: " + str(len(output_stack[0, 0, :])))
-    plt.imsave(sav_dir + filename_split + '_' + str(i) + '_DISTANCE_THRESHED_8px_post-processed.tif', (final_bleb_matrix[:, :, i]), cmap='binary_r')
-    plt.imsave(sav_dir + filename_split + '_' + str(i) + '_DISTANCE_THRESHED_8px_elimed_post-processed.tif', (elim_matrix[:, :, i]), cmap='binary_r')
+    plt.imsave(sav_dir + filename_split + '_z' + str(i) + '_DISTANCE_THRESHED_8px_post-processed.tif', (final_bleb_matrix[:, :, i]), cmap='binary_r')
+    plt.imsave(sav_dir + filename_split + '_z' + str(i) + '_DISTANCE_THRESHED_8px_elimed_post-processed.tif', (elim_matrix[:, :, i]), cmap='binary_r')
 
 
 """ Pseudo-local thresholding (applies Otsu to each individual bleb) """
