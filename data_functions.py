@@ -17,6 +17,7 @@ from natsort import natsort_keygen, ns
 import os
 import pickle
 import scipy.io as sio
+from tifffile import imsave
 
 import zipfile
 import bz2
@@ -25,6 +26,219 @@ from plot_functions import *
 from data_functions import *
 from post_process_functions import *
 from UNet import *
+
+
+""" Convert voxel list to array """
+def convert_vox_to_matrix(voxel_idx, zero_matrix):
+    for row in voxel_idx:
+        #print(row)
+        zero_matrix[(row[0], row[1], row[2])] = 1
+    return zero_matrix
+
+
+""" For plotting the output as an interactive scroller"""
+class IndexTracker(object):
+    def __init__(self, ax, X):
+        self.ax = ax
+        ax.set_title('use scroll wheel to navigate images')
+
+        self.X = X
+        rows, cols, self.slices = X.shape
+        self.ind = self.slices//2
+
+        self.im = ax.imshow(self.X[:, :, self.ind])
+        self.update()
+
+    def onscroll(self, event):
+        print("%s %s" % (event.button, event.step))
+        if event.button == 'up':
+            self.ind = (self.ind + 1) % self.slices
+        else:
+            self.ind = (self.ind - 1) % self.slices
+        self.update()
+
+    def update(self):
+        self.im.set_data(self.X[:, :, self.ind])
+        self.ax.set_ylabel('slice %s' % self.ind)
+        self.im.axes.figure.canvas.draw()
+
+
+""" Only keeps objects in stack that are 5 slices thick!!!"""
+def slice_thresh(output_stack, slice_size=5):
+    binary_overlap = output_stack > 0
+    labelled = measure.label(binary_overlap)
+    cc_overlap = measure.regionprops(labelled)
+    
+    all_voxels = []
+    all_voxels_kept = []; total_blebs_kept = 0
+    all_voxels_elim = []; total_blebs_elim = 0
+    total_blebs_counted = len(cc_overlap)
+    for bleb in cc_overlap:
+        cur_bleb_coords = bleb['coords']
+    
+        # get only z-axis dimensions
+        z_axis_span = cur_bleb_coords[:, -1]
+    
+        min_slice = min(z_axis_span)
+        max_slice = max(z_axis_span)
+        span = max_slice - min_slice
+    
+        """ ONLY KEEP OBJECTS that span > 5 slices """
+        if span >= slice_size:
+            print("WIDE ENOUGH object") 
+            if len(all_voxels_kept) == 0:   # if it's empty, initialize
+                all_voxels_kept = cur_bleb_coords
+            else:
+                all_voxels_kept = np.append(all_voxels_kept, cur_bleb_coords, axis = 0)
+                
+            total_blebs_kept = total_blebs_kept + 1
+        else:
+            print("NOT wide enough")
+            if len(all_voxels_elim) == 0:
+                print("came here")
+                all_voxels_elim = cur_bleb_coords
+            else:
+                all_voxels_elim = np.append(all_voxels_elim, cur_bleb_coords, axis = 0)
+                
+            total_blebs_elim = total_blebs_elim + 1
+       
+        if len(all_voxels) == 0:   # if it's empty, initialize
+            all_voxels = cur_bleb_coords
+        else:
+            all_voxels = np.append(all_voxels, cur_bleb_coords, axis = 0)
+            
+    print("Total kept: " + str(total_blebs_kept) + " Total eliminated: " + str(total_blebs_elim))
+    
+    
+    """ convert voxels to matrix """
+    all_seg = convert_vox_to_matrix(all_voxels, np.zeros(output_stack.shape))
+    all_blebs = convert_vox_to_matrix(all_voxels_kept, np.zeros(output_stack.shape))
+    all_eliminated = convert_vox_to_matrix(all_voxels_elim, np.zeros(output_stack.shape))
+    
+    return all_seg, all_blebs, all_eliminated
+
+
+""" Find vectors of movement and eliminate blobs that migrate """
+def distance_thresh(all_blebs_THRESH, average_thresh=15, max_thresh=15):
+    
+    # (1) Find and plot centroid of each 2D image object:
+    centroid_matrix_3D = np.zeros(np.shape(all_blebs_THRESH))
+    for i in range(len(all_blebs_THRESH[0, 0, :])):
+        bin_cur_slice = all_blebs_THRESH[:, :, i] > 0
+        label_cur_slice = measure.label(bin_cur_slice)
+        cc_overlap_cur = measure.regionprops(label_cur_slice)
+        
+        for obj in cc_overlap_cur:
+            centroid_matrix_3D[(int(obj['centroid'][0]),) + (int(obj['centroid'][1]),) + (i,)] = 1   # the "i" puts the centroid in the correct slice!!!
+        
+        #print(i)
+        
+    # (2) use 3D cc_overlap to find clusters of centroids
+    binary_overlap = all_blebs_THRESH > 0
+    labelled = measure.label(binary_overlap)
+    cc_overlap_3D = measure.regionprops(labelled)
+        
+    all_voxels_kept = []; num_kept = 0
+    all_voxels_elim = []; num_elim = 0
+    for obj3D in cc_overlap_3D:
+        
+        slice_idx = np.unique(obj3D['coords'][:, -1])
+        
+        cropped_centroid_matrix = centroid_matrix_3D[:, :, min(slice_idx) : max(slice_idx) + 1]
+        
+        mask = np.ones(np.shape(cropped_centroid_matrix))
+
+        translate_z_coords = obj3D['coords'][:, 0:2]
+        z_coords = obj3D['coords'][:, 2:3]  % min(slice_idx)   # TRANSLATES z-coords to 0 by taking modulo of smallest slice index!!!
+        translate_z_coords = np.append(translate_z_coords, z_coords, -1)
+        
+        obj_mask = convert_vox_to_matrix(translate_z_coords, np.zeros(cropped_centroid_matrix.shape))
+        mask[obj_mask == 1] = 0 
+
+        tmp_centroids = np.copy(cropped_centroid_matrix)  # contains only centroids that are masked by array above
+        tmp_centroids[mask == 1] = 0
+        
+        
+        ##mask = np.ones(np.shape(centroid_matrix_3D))
+        ##obj_mask = convert_vox_to_matrix(obj3D['coords'], np.zeros(output_stack.shape))
+        ##mask[obj_mask == 1] = 0 
+    
+        ##tmp_centroids = np.copy(centroid_matrix_3D)  # contains only centroids that are masked by array above
+        ##tmp_centroids[mask == 1] = 0
+        
+        cc_overlap_cur_cent = measure.regionprops(np.asarray(tmp_centroids, dtype=np.int))  
+        
+        list_centroids = []
+        for centroid in cc_overlap_cur_cent:
+            if len(list_centroids) == 0:
+                list_centroids = centroid['coords']
+            else:
+                list_centroids = np.append(list_centroids, centroid['coords'], axis = 0)
+    
+        sorted_centroids = sorted(list_centroids,key=lambda x: x[2])  # sort by column 3
+        
+        
+        """ Any object with only 1 or less centroids is considered BAD, and is eliminated"""
+        if len(sorted_centroids) <= 1:
+            num_elim = num_elim + 1
+            
+            if len(all_voxels_elim) == 0:   # if it's empty, initialize
+                all_voxels_elim = obj3D['coords']
+            else:
+                all_voxels_elim = np.append(all_voxels_elim, obj3D['coords'], axis = 0)
+            continue;
+        
+    
+        # (3) Find distance from 1st - 2nd - 3rd - 4th - 5th ect... centroids
+        all_distances = []
+        for i in range(len(sorted_centroids) - 1):
+            center_1 = sorted_centroids[i]
+            center_2 = sorted_centroids[i + 1]
+            
+            # Find distance:
+            dist = math.sqrt(sum((center_1 - center_2)**2))           # DISTANCE FORMULA
+            #print(dist)
+            all_distances.append(dist)
+        average_dist = sum(all_distances)/len(all_distances)
+        max_dist = max(all_distances)
+        
+        
+        # (4) If average distance is BELOW thresdhold, then keep the 3D cell body!!!
+        # OR, if max distance moved > 15 pixels
+        #print("average dist is: " + str(average_dist))
+        if average_dist < average_thresh or max_dist < max_thresh:
+            if len(all_voxels_kept) == 0:   # if it's empty, initialize
+                all_voxels_kept = obj3D['coords']
+            else:
+                all_voxels_kept = np.append(all_voxels_kept, obj3D['coords'], axis = 0)
+            
+            num_kept = num_kept + 1
+        else:
+            num_elim = num_elim + 1
+            
+            if len(all_voxels_elim) == 0:   # if it's empty, initialize
+                all_voxels_elim = obj3D['coords']
+            else:
+                all_voxels_elim = np.append(all_voxels_elim, obj3D['coords'], axis = 0)
+            
+        print("Finished distance thresholding for: " + str(num_elim + num_kept) + " out of " + str(len(cc_overlap_3D)) + " images")
+    
+    final_bleb_matrix = convert_vox_to_matrix(all_voxels_kept, np.zeros(all_blebs_THRESH.shape))
+    elim_matrix = convert_vox_to_matrix(all_voxels_elim, np.zeros(all_blebs_THRESH.shape))
+    print('Kept: ' + str(num_kept) + " eliminated: " + str(num_elim))
+    
+    return final_bleb_matrix, elim_matrix
+
+
+
+""" converts a matrix into a multipage tiff to save!!! """
+def convert_matrix_to_multipage_tiff(matrix):
+    rolled = np.rollaxis(final_bleb_matrix, 2, 0).shape  # changes axis to be correct sizes
+    tiff_image = np.zeros((rolled), 'uint16')
+    for i in range(len(tiff_image)):
+        tiff_image[i, :, :] = matrix[:, :, i]
+        
+    return tiff_image
 
 
 
