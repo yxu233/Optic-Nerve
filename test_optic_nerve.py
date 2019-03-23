@@ -142,6 +142,8 @@ for input_path in list_folder:
         print("Directory " , sav_dir ,  " Created ") 
     except FileExistsError:
         print("Directory " , sav_dir ,  " already exists")
+        
+    sav_dir = sav_dir + '/'
     
     # Required to initialize all
     batch_size = 1;

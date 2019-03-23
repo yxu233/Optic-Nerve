@@ -233,7 +233,7 @@ def distance_thresh(all_blebs_THRESH, average_thresh=15, max_thresh=15):
 
 """ converts a matrix into a multipage tiff to save!!! """
 def convert_matrix_to_multipage_tiff(matrix):
-    rolled = np.rollaxis(final_bleb_matrix, 2, 0).shape  # changes axis to be correct sizes
+    rolled = np.rollaxis(matrix, 2, 0).shape  # changes axis to be correct sizes
     tiff_image = np.zeros((rolled), 'uint16')
     for i in range(len(tiff_image)):
         tiff_image[i, :, :] = matrix[:, :, i]
