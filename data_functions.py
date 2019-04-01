@@ -17,7 +17,6 @@ from natsort import natsort_keygen, ns
 import os
 import pickle
 import scipy.io as sio
-from tifffile import imsave
 
 import zipfile
 import bz2
