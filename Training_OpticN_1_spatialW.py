@@ -56,7 +56,7 @@ mean_arr = load_pkl('', 'mean_arr.pkl')
 std_arr = load_pkl('', 'std_arr.pkl')
                
 """ Load filenames from zip """
-images = glob.glob(os.path.join(input_path,'*input.tif'))
+images = glob.glob(os.path.join(input_path,'*_input.tif'))
 examples = [dict(input=i,truth=i.replace('input.tif','truth.tif')) for i in images]
 
 counter = list(range(len(examples)))  # create a counter, so can randomize it
@@ -179,13 +179,13 @@ for P in range(8000000000000000000000):
             channel_2[channel_2 == 255] = 1   
             
             truth_im = np.zeros(np.shape(truth_tmp) + (2,))
-            truth_im[:, :, 0] = channel_2   # background
-            truth_im[:, :, 1] = channel_1   # blebs
-            
-            # some reasons values are switched in Barbara's images
-            if "_BARBARA_" in truth_name:
-                truth_im[:, :, 0] = channel_1   # background
-                truth_im[:, :, 1] = channel_2   # blebs
+#            truth_im[:, :, 0] = channel_2   # background
+#            truth_im[:, :, 1] = channel_1   # blebs
+#            
+#            # some reasons values are switched in Barbara's images
+#            if "_BARBARA_" in truth_name:
+            truth_im[:, :, 0] = channel_1   # background
+            truth_im[:, :, 1] = channel_2   # blebs
                     
         blebs_label = np.copy(truth_im[:, :, 1])
 
@@ -252,13 +252,13 @@ for P in range(8000000000000000000000):
                       channel_2[channel_2 == 255] = 1   
                           
                       truth_im_val = np.zeros(np.shape(truth_tmp_val) + (2,))
-                      truth_im_val[:, :, 0] = channel_2   # background
-                      truth_im_val[:, :, 1] = channel_1   # blebs
-                      
-                      # some reasons values are switched in Barbara's images
-                      if "_BARBARA_" in truth_name:
-                           truth_im_val[:, :, 0] = channel_1   # background
-                           truth_im_val[:, :, 1] = channel_2   # blebs
+#                      truth_im_val[:, :, 0] = channel_2   # background
+#                      truth_im_val[:, :, 1] = channel_1   # blebs
+#                      
+#                      # some reasons values are switched in Barbara's images
+#                      if "_BARBARA_" in truth_name:
+                      truth_im_val[:, :, 0] = channel_1   # background
+                      truth_im_val[:, :, 1] = channel_2   # blebs
 
                      
         
