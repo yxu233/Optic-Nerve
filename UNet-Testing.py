@@ -70,7 +70,7 @@ num_check = 400000
 resize = 0
 im_scale = 0.300
 
-
+tf_size = 1024
 ## for input
 #input_path = 'J:/DATA_2017-2018/Optic_nerve/EAE_miR_AAV2/2018.08.07/ON_11/'
 #input_path = 'J:/DATA_2017-2018/Optic_nerve/EAE_miR_AAV2/2018.08.16/EAE_A3/'
@@ -86,10 +86,10 @@ std_arr = load_pkl('', 'std_arr.pkl')
                
 
 # Variable Declaration
-x = tf.placeholder('float32', shape=[None, 1024, 1024, 3], name='InputImage')
-y_ = tf.placeholder('float32', shape=[None, 1024, 1024, 2], name='CorrectLabel')
+x = tf.placeholder('float32', shape=[None, tf_size, tf_size, 3], name='InputImage')
+y_ = tf.placeholder('float32', shape=[None, tf_size, tf_size, 2], name='CorrectLabel')
 training = tf.placeholder(tf.bool, name='training')
-weight_matrix = tf.placeholder('float32', shape=[None, 1024, 1024, 2], name = 'weighted_labels')
+weight_matrix = tf.placeholder('float32', shape=[None, tf_size, tf_size, 2], name = 'weighted_labels')
 
 
 """ Creates network and cost function"""
@@ -170,6 +170,7 @@ for input_path in list_folder:
             input_im = np.asarray(Image.open(input_name), dtype=np.float32)
            
             size_whole = input_im.shape[0]
+            
             size = int(size_whole) # 4775 and 6157 for the newest one
             if resize:
                 size = int((size * im_scale) / 0.45) # 4775 and 6157 for the newest one
@@ -187,14 +188,30 @@ for input_path in list_folder:
             input_save = np.copy(input_im)
                            
             
-            """ divide input into patches, later put patches together """
+            """ Divide input into patches if larger than tf_size, later put patches together
+                OR
+                pad image to be tf_size so can have input of any size
+            """
             patches = np.zeros(1)
-            if input_im.shape[0] > 1024 or input_im.shape[1] > 1024:
-                patches = patchify(input_im, patch_shape=(1024,1024), overlap=10)
+            if input_im.shape[0] > tf_size or input_im.shape[1] > tf_size:
+                patches = patchify(input_im, patch_shape=(tf_size,tf_size), overlap=10)
                 if not type(patches) is np.ndarray:
                     patches = np.array(patches)
-            
+            elif input_im.shape[0] > tf_size or input_im.shape[1] > tf_size:
+                
+                delta_w = tf_size - input_im.shape[0]
+                delta_h = tf_size - input_im.shape[1]
+                top, bottom = delta_h//2, delta_h-(delta_h//2)
+                left, right = delta_w//2, delta_w-(delta_w//2)
+                
+                color = [0, 0, 0]
+                input_im = cv.copyMakeBorder(input_im, top, bottom, left, right, cv.BORDER_CONSTANT,
+                    value=color)
+                
+                #cv.imshow("image", new_im)
+                       
                      
+                    
 
             """ if trying to run with test images and not new images, load the truth """
             if truth:
@@ -240,8 +257,8 @@ for input_path in list_folder:
                 weights.append(weighted_labels)
                 
             else:
-                batch_y.append(np.zeros([1024,1024,2]))
-                weights.append(np.zeros([1024,1024,2]))
+                batch_y.append(np.zeros([tf_size,tf_size,2]))
+                weights.append(np.zeros([tf_size,tf_size,2]))
     
             
             
