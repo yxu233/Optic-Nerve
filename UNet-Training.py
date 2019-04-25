@@ -43,7 +43,8 @@ tf.set_random_seed(1); numpy.random.seed(1)
 #s_path = 'J:/DATA_2017-2018/Optic_nerve/EAE_miR_AAV2/2018.08.07/ON_11/Checkpoints/3rd_run_SHOWCASE/'
 #s_path = 'C:/Users/Neuroimmunology Unit/Documents/GitHub/Optic Nerve/Checkpoints/3rd_OPTIC_NERVE_large_network/'
 #s_path = 'C:/Users/Neuroimmunology Unit/Documents/GitHub/Optic Nerve/Checkpoints/2nd_OPTIC_NERVE_run_full_dataset/'
-s_path = 'C:/Users/Neuroimmunology Unit/Documents/GitHub/Optic Nerve/Checkpoints/4th_OPTIC_NERVE_4_deep_network/'
+#s_path = 'C:/Users/Neuroimmunology Unit/Documents/GitHub/Optic Nerve/Checkpoints/4th_OPTIC_NERVE_4_deep_network/'
+s_path = 'C:/Users/Neuroimmunology Unit/Documents/GitHub/Optic Nerve/Checkpoints/5th_OPTIC_NERVE_pos_only/'
 
 
 ## for input
@@ -56,7 +57,7 @@ mean_arr = load_pkl('', 'mean_arr.pkl')
 std_arr = load_pkl('', 'std_arr.pkl')
                
 """ Load filenames from zip """
-images = glob.glob(os.path.join(input_path,'*_input.tif'))
+images = glob.glob(os.path.join(input_path,'*_pos_input.tif'))
 examples = [dict(input=i,truth=i.replace('input.tif','truth.tif')) for i in images]
 
 counter = list(range(len(examples)))  # create a counter, so can randomize it
