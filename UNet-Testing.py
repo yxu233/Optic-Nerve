@@ -37,13 +37,13 @@ import os
 import zipfile
 import scipy
 import cv2 as cv
-
-
+from natsort import natsort_keygen, ns
 
 from plot_functions import *
 from data_functions import *
 #from post_process_functions import *
 from data_functions import *
+from split_im_to_patches import *
 from UNet import *
 import glob, os
 
@@ -65,6 +65,11 @@ tf.set_random_seed(1); np.random.seed(1)
 s_path = './Checkpoints/2nd_OPTIC_NERVE_run_full_dataset/'
 num_check = 400000
 #s_path = './Checkpoints/3rd_OPTIC_NERVE_large_network/'
+
+
+resize = 0
+im_scale = 0.300
+
 
 ## for input
 #input_path = 'J:/DATA_2017-2018/Optic_nerve/EAE_miR_AAV2/2018.08.07/ON_11/'
@@ -130,10 +135,12 @@ for input_path in list_folder:
  
     """ Load filenames from zip """
     images = glob.glob(os.path.join(input_path,'*.tif'))    # can switch this to "*truth.tif" if there is no name for "input"
+    images.sort(key=natsort_keygen(alg=ns.REAL))  # natural sorting
     examples = [dict(input=i,truth=i.replace('.tif','truth.tif')) for i in images]
     
     if truth:
         images = glob.glob(os.path.join(input_path,'*_pos_input.tif'))    # can switch this to "*truth.tif" if there is no name for "input"
+        images.sort(key=natsort_keygen(alg=ns.REAL))  # natural sorting
         examples = [dict(input=i,truth=i.replace('input.tif','truth.tif')) for i in images]
 
     try:
@@ -161,12 +168,34 @@ for input_path in list_folder:
             
             input_name = examples[i]['input']
             input_im = np.asarray(Image.open(input_name), dtype=np.float32)
+           
+            size_whole = input_im.shape[0]
+            size = int(size_whole) # 4775 and 6157 for the newest one
+            if resize:
+                size = int((size * im_scale) / 0.45) # 4775 and 6157 for the newest one
+                input_im = resize_adaptive(Image.fromarray(input_im), size, method=Image.BICUBIC)
+                input_im = np.asarray(input_im, dtype=np.float32)
+
+            
+            # convert to single channel
+            if len(input_im.shape) > 2:
+                input_im = input_im[:, :, 1]   # take the green channel
+                
+            # scale to between 0 -- 255
+            if input_im.max() > 255:
+                input_im = input_im / (input_im.max()/255)
             input_save = np.copy(input_im)
-             
-            """ maybe remove normalization??? """
-            input_im = normalize_im(input_im, mean_arr, std_arr) 
-     
-    
+                           
+            
+            """ divide input into patches, later put patches together """
+            patches = np.zeros(1)
+            if input_im.shape[0] > 1024 or input_im.shape[1] > 1024:
+                patches = patchify(input_im, patch_shape=(1024,1024), overlap=10)
+                if not type(patches) is np.ndarray:
+                    patches = np.array(patches)
+            
+                     
+
             """ if trying to run with test images and not new images, load the truth """
             if truth:
                 truth_name = examples[i]['truth']
@@ -214,11 +243,81 @@ for input_path in list_folder:
                 batch_y.append(np.zeros([1024,1024,2]))
                 weights.append(np.zeros([1024,1024,2]))
     
-                
-            """ set inputs and truth """
-            batch_x.append(input_im)
-    
+            
+            
+            """ if do split patches, then:
+                (1) need to skip any patches that are empty to save time
+                (2) analyze each patch image individually, then recombine
+            """
+            if patches.any():
+                seg_output_patches = np.zeros(np.shape(patches))
+                idx = 0
+                for input_im in patches:
                     
+                    #input_im = patches[idx]
+                    input_RGB = np.zeros(np.shape(input_im) + (3,))
+                    input_RGB[:, :, 1] = input_im
+                    input_RGB = np.asarray(input_RGB, dtype=np.uint8)
+                    input_im = input_RGB
+
+                    # SKIP IF NOTHING IS IN THE IMAGE
+                    input_im[input_im < 50] = 0
+                    if np.count_nonzero(input_im) < 1000:
+                        seg_train = np.zeros(np.shape(patches[0])) 
+                        #seg_train[0:100, 0:500] = 25;   # for debugging
+                        seg_output_patches[idx, :, :] = seg_train
+                        idx = idx + 1     
+                        #print("skipped")
+                        continue
+
+                    #plt.figure(8); plt.imshow(input_im); plt.pause(1)
+                    #plt.figure(9); plt.imshow(seg_train); plt.pause(2)
+                
+                    """ maybe remove normalization??? """
+                    input_im = normalize_im(input_im, mean_arr, std_arr) 
+                        
+                    """ set inputs and truth """
+                    batch_x.append(input_im)
+            
+                            
+                    """ Feed into training loop """
+                    feed_dict = {x:batch_x, y_:batch_y, training:1, weight_matrix:weights}                 
+                    output_train = softMaxed.eval(feed_dict=feed_dict)
+                    seg_train = np.argmax(output_train, axis = -1)[0] 
+                    seg_train[0:50, 0:50] = 1;   # for debugging
+                    seg_output_patches[idx, :, :] = seg_train
+                    idx = idx + 1
+                    batch_x = []
+                    
+                seg_train = collect(seg_output_patches, (input_save.shape[0], input_save.shape[1]), overlap=10)
+            else:
+                    input_RGB = np.zeros(np.shape(input_im) + (3,))
+                    input_RGB[:, :, 1] = input_im
+                    input_RGB = np.asarray(input_RGB, dtype=np.uint8)
+                    input_im = input_RGB
+
+                    """ maybe remove normalization??? """
+                    input_im = normalize_im(input_im, mean_arr, std_arr) 
+                        
+                    """ set inputs and truth """
+                    batch_x.append(input_im)
+            
+                    """ Feed into training loop """
+                    feed_dict = {x:batch_x, y_:batch_y, training:1, weight_matrix:weights}                 
+                    output_train = softMaxed.eval(feed_dict=feed_dict)
+                    seg_train = np.argmax(output_train, axis = -1)[0] 
+                
+                
+                
+            """ Makes into RGB image """
+            input_RGB = np.zeros(np.shape(input_save) + (3,))
+            input_RGB[:, :, 1] = input_save
+            input_RGB = np.asarray(input_RGB, dtype=np.uint8)
+            input_save = input_RGB
+
+            
+            
+            
             """ Plot for debug """
             if truth:
                 plt.figure(1); 
@@ -227,9 +326,6 @@ for input_path in list_folder:
                 plt.subplot(223); plt.imshow(channel_1); plt.title('background');
                 plt.subplot(224); plt.imshow(channel_2); plt.title('blebs');
     
-        
-            """ Feed into training loop """
-            feed_dict = {x:batch_x, y_:batch_y, training:1, weight_matrix:weights}                 
             print('Analyzed: %d of total: %d' %(i + 1, len(examples)))
                
                
@@ -239,11 +335,8 @@ for input_path in list_folder:
             jacc_t = jaccard.eval(feed_dict=feed_dict)
             plot_jaccard.append(jacc_t)           
                                   
-            """ Plot for debug """
-            feed_dict = {x:batch_x, y_:batch_y, training:1, weight_matrix:weights}  
-            output_train = softMaxed.eval(feed_dict=feed_dict)
-            seg_train = np.argmax(output_train, axis = -1)[0]              
-                            
+            """ Plot outputs """
+                         
             #plt.figure(2);
             plt.figure(num=2, figsize=(40, 40), dpi=80, facecolor='w', edgecolor='k')
             if truth:  # plot truth
@@ -308,11 +401,11 @@ for input_path in list_folder:
             if len(output_stack) == 0:
                 output_stack = seg_train
                 #output_stack_masked = seg_train_masked
-                input_im_stack = input_save[:, :, 1]
+                input_im_stack = input_save
             else:
                 output_stack = np.dstack([output_stack, seg_train])
                 #output_stack_masked = np.dstack([output_stack_masked, seg_train_masked])
-                input_im_stack = np.dstack([input_im_stack, input_save[:, :, 1]])
+                input_im_stack = np.dstack([input_im_stack, input_save])
     
     
     
