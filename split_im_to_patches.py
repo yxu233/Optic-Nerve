@@ -125,7 +125,7 @@ def patchify(img, patch_shape=(1000,1000), overlap=10):
 
     pad_h, pad_w = h_new - img_h + 1, w_new - img_w + 1
     #img = np.pad(img, ((0, pad_h), (0, pad_w), (0, 0)), 'mean')   
-    img = np.pad(img, ((0, pad_h), (0, pad_w)), 'mean')     # TIGER-added
+    img = np.pad(img, ((0, pad_h), (0, pad_w)), "constant")     # TIGER-added
 
 
     return window_nd(img, (p_h, p_w), \
