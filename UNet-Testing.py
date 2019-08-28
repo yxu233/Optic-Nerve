@@ -24,7 +24,6 @@ Created on Sunday Dec. 24th
 
 
 import tensorflow as tf
-from matplotlib import *
 import numpy as np
 from PIL import Image
 from os import listdir
