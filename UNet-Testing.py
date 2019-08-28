@@ -62,7 +62,10 @@ tf.set_random_seed(1); np.random.seed(1)
 ## for saving
 #s_path = 'J:/DATA_2017-2018/Optic_nerve/EAE_miR_AAV2/2018.08.07/ON_11/Checkpoints/3rd_run_SHOWCASE/'
 s_path = './Checkpoints/2nd_OPTIC_NERVE_run_full_dataset/'
-num_check = 400000
+s_path = './Checkpoints/2nd_OPTIC_NERVE_run_CONTINUE_PATCHES/'
+
+#num_check = 400000
+num_check = 200000
 #s_path = './Checkpoints/3rd_OPTIC_NERVE_large_network/'
 
 
@@ -168,6 +171,17 @@ for input_path in list_folder:
             input_name = examples[i]['input']
             input_im = np.asarray(Image.open(input_name), dtype=np.float32)
            
+            """ NEED TO CONVERT TO np.uint8 if the original input is np.uint16!!!"""
+            # NORMALIZED BECAUSE IMAGE IS uint16 ==> do same when actually running images!!!
+            input_im = np.asarray(Image.open(input_name))
+            if input_im.dtype == 'uint16':
+                input_im = np.asarray(input_im, dtype=np.float32)
+                input_im = cv.normalize(input_im, 0, 255, cv.NORM_MINMAX)
+                input_im = input_im * 255
+                
+            input_im = np.asarray(input_im, dtype= np.float32)
+            
+                    
             size_whole = input_im.shape[0]
             
             size = int(size_whole) # 4775 and 6157 for the newest one
@@ -196,7 +210,7 @@ for input_path in list_folder:
                 patches = patchify(input_im, patch_shape=(tf_size,tf_size), overlap=10)
                 if not type(patches) is np.ndarray:
                     patches = np.array(patches)
-            elif input_im.shape[0] > tf_size or input_im.shape[1] > tf_size:
+            elif input_im.shape[0] < tf_size or input_im.shape[1] < tf_size:
                 
                 delta_w = tf_size - input_im.shape[0]
                 delta_h = tf_size - input_im.shape[1]
@@ -265,6 +279,7 @@ for input_path in list_folder:
                 (1) need to skip any patches that are empty to save time
                 (2) analyze each patch image individually, then recombine
             """
+            feed_dict = []
             if patches.any():
                 seg_output_patches = np.zeros(np.shape(patches))
                 idx = 0
@@ -283,7 +298,7 @@ for input_path in list_folder:
                         #seg_train[0:100, 0:500] = 25;   # for debugging
                         seg_output_patches[idx, :, :] = seg_train
                         idx = idx + 1     
-                        #print("skipped")
+                        print("skipped")
                         continue
 
                     #plt.figure(8); plt.imshow(input_im); plt.pause(1)
@@ -305,6 +320,7 @@ for input_path in list_folder:
                     idx = idx + 1
                     batch_x = []
                     
+                k = q
                 seg_train = collect(seg_output_patches, (input_save.shape[0], input_save.shape[1]), overlap=10)
             else:
                     input_RGB = np.zeros(np.shape(input_im) + (3,))
@@ -419,9 +435,15 @@ for input_path in list_folder:
                 #output_stack_masked = seg_train_masked
                 input_im_stack = input_save
             else:
-                output_stack = np.dstack([output_stack, seg_train])
-                #output_stack_masked = np.dstack([output_stack_masked, seg_train_masked])
-                input_im_stack = np.dstack([input_im_stack, input_save])
+                """ Keep this if want to keep all the outputs as single stack """
+                #output_stack = np.dstack([output_stack, seg_train])
+                ##output_stack_masked = np.dstack([output_stack_masked, seg_train_masked])
+                #input_im_stack = np.dstack([input_im_stack, input_save])
+
+            """ save individual tiffs as well """    
+            plt.imsave(sav_dir + filename_split + '_' + str(i) + '_input_im.tif', (input_save))
+            plt.imsave(sav_dir + filename_split + '_' + str(i) + '_output_seg.tif', (seg_train))
+            
     
     
     

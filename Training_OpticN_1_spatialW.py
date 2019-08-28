@@ -42,15 +42,14 @@ tf.set_random_seed(1); numpy.random.seed(1)
 ## for saving
 #s_path = 'J:/DATA_2017-2018/Optic_nerve/EAE_miR_AAV2/2018.08.07/ON_11/Checkpoints/3rd_run_SHOWCASE/'
 #s_path = 'C:/Users/Neuroimmunology Unit/Documents/GitHub/Optic Nerve/Checkpoints/3rd_OPTIC_NERVE_large_network/'
-#s_path = 'C:/Users/Neuroimmunology Unit/Documents/GitHub/Optic Nerve/Checkpoints/2nd_OPTIC_NERVE_run_full_dataset/'
+s_path = 'C:/Users/Neuroimmunology Unit/Documents/GitHub/Optic Nerve/Checkpoints/2nd_OPTIC_NERVE_run_CONTINUE_PATCHES/'
 #s_path = 'C:/Users/Neuroimmunology Unit/Documents/GitHub/Optic Nerve/Checkpoints/4th_OPTIC_NERVE_4_deep_network/'
-s_path = 'C:/Users/Neuroimmunology Unit/Documents/GitHub/Optic Nerve/Checkpoints/5th_OPTIC_NERVE_pos_only/'
+#s_path = 'C:/Users/Neuroimmunology Unit/Documents/GitHub/Optic Nerve/Checkpoints/5th_OPTIC_NERVE_pos_only/'
 
 
 ## for input
 #input_path = 'J:/DATA_2017-2018/Optic_nerve/EAE_miR_AAV2/2018.08.07/ON_11/Training Data/'
-input_path = 'C:/Users/Neuroimmunology Unit/Documents/GitHub/Optic Nerve/Training Data/'
-
+input_path = 'I:/Optic nerve/Training Data Full/'
 
 """ load mean and std """  
 mean_arr = load_pkl('', 'mean_arr.pkl')
@@ -77,9 +76,9 @@ weight_matrix = tf.placeholder('float32', shape=[None, 1024, 1024, 2], name = 'w
 
 
 """ Creates network and cost function"""
-#y, y_b, L1, L2, L3, L4, L5, L6, L7, L8, L9, L9_conv, L10, L11, logits, softMaxed = create_network_SMALL(x, y_, training)
+y, y_b, L1, L2, L3, L4, L5, L6, L7, L8, L9, L9_conv, L10, L11, logits, softMaxed = create_network_SMALL(x, y_, training)
 #y, y_b, L1, L2, L3, L4, L5, L6, L7, L8, L9, L9_conv, L10, L11, logits, softMaxed = create_network(x, y_, training)
-y, y_b, L1, L2, L3, L4, L5, L6, L7, L8, L9, L9_conv, L10, L11, logits, softMaxed = create_network_4_layers(x, y_, training)
+#y, y_b, L1, L2, L3, L4, L5, L6, L7, L8, L9, L9_conv, L10, L11, logits, softMaxed = create_network_4_layers(x, y_, training)
 accuracy, jaccard, train_step, cross_entropy, loss, cross_entropy, original = costOptm(y, y_b, logits, weight_matrix, weight_mat=True)
 
 sess = tf.InteractiveSession()
@@ -108,6 +107,9 @@ else:
     num_check = int(num_check[1])
     
     saver.restore(sess, s_path + checkpoint)
+    
+#    plot_cost = []; plot_cost_val = []; plot_jaccard = []; plot_jaccard_val = [];
+#    num_check= 0;
     
     # Getting back the objects:
     with open(s_path + 'loss_global.pkl', 'rb') as f:  # Python 3: open(..., 'rb')
@@ -140,6 +142,7 @@ else:
         input_counter = loaded[0]  
 
 # Required to initialize all
+
 
 
 batch_size = 4; 
@@ -306,9 +309,7 @@ for P in range(8000000000000000000000):
               plot_cost_fun(plot_cost, plot_cost_val)
               plot_jaccard_fun(plot_jaccard, plot_jaccard_val)
               
-              plt.figure(18); plt.savefig(s_path + 'global_loss.png')
-              plt.figure(19); plt.savefig(s_path + 'detailed_loss.png')
-              plt.figure(21); plt.savefig(s_path + 'jaccard.png')
+
 
               """ Plot for debug """
               batch_x.append(input_im); batch_y.append(truth_im); weights.append(weighted_labels);
@@ -327,14 +328,16 @@ for P in range(8000000000000000000000):
               plt.subplot(331); plt.imshow(truth_im[:, :, 1]); plt.title('Truth Train');
               plt.subplot(332); plt.imshow(seg_train); plt.title('Output Train');              
               plt.subplot(334); plt.imshow(truth_im_val[:, :, 1]); plt.title('Truth Validation');        
-              plt.subplot(335); plt.imshow(seg_val); plt.title('Output Validation'); plt.pause(0.0005);
+              plt.subplot(335); plt.imshow(seg_val); plt.title('Output Validation'); plt.pause(0.0005);              
+              plt.figure(18); plt.savefig(s_path + 'global_loss.png')
+              plt.figure(19); plt.savefig(s_path + 'detailed_loss.png')
+              plt.figure(21); plt.savefig(s_path + 'jaccard.png')
 
               #plt.subplot(333); plt.imshow(np.asarray(input_im, dtype = np.uint8)); plt.title('Input');
               plt.subplot(333); plt.imshow(sp_weighted_labels); plt.title('weighted');    plt.pause(0.005)
               plt.subplot(336); plt.imshow(truth_im[:, :, 0]); plt.title('Ch1: background');
               plt.subplot(339); plt.imshow(truth_im[:, :, 1]); plt.title('Ch2: blebs');       
               plt.pause(0.05)
-
               
               if epochs > 500:
                   if epochs % 500 == 0:

@@ -21,18 +21,21 @@ import pickle as pickle
 import os
 import zipfile
 import scipy
+import cv2 as cv
+from natsort import natsort_keygen, ns
 
 from plot_functions import *
 from data_functions import *
 #from post_process_functions import *
+from data_functions import *
+from split_im_to_patches import *
 from UNet import *
+import glob, os
 
-import nibabel as nib
+
 import tkinter
 from tkinter import filedialog
 import os
-    
-
 """  Currently assumes:
     
     R ==> 
@@ -119,4 +122,3 @@ for i in range(len(onlyfile_names)):
     truth_im.save(sav_dir + 'myelin_' + filename + '_'  + "%07d" % (uncleaned,) + pos + '_truth.tif')
     
     uncleaned = uncleaned + 1
-    
