@@ -307,6 +307,7 @@ def change_scale_plot():
     """ MOVING AVERAGE """
     num_pts = 10
     dist_points = 200
+    multiply = 10
     mov_cost = calc_moving_avg(plot_cost, num_pts=num_pts, dist_points=dist_points)
     mov_cost_val = calc_moving_avg(plot_cost_val, num_pts=num_pts, dist_points=dist_points)
     mov_jaccard = calc_moving_avg(plot_jaccard, num_pts=num_pts, dist_points=dist_points)
@@ -344,7 +345,38 @@ def change_scale_plot():
     plt.figure(22); plt.plot(x_idx,mov_jaccard_noW, label='Validation_no_weight'); plt.title("Jaccard");     
     plt.legend(loc='upper left');      
     
+
+""" Plot for optic nerve data set """
     
+def plot_for_optic_nerve():
+    multiply = 10
+    font_size = 11
+    legend_size = 11
+    plt.rcParams.update({'font.size': 9})   
+    
+    font_size = 11
+    plt.rcParams.update({'font.size': 10})  
+    
+    """ no-weight """
+    dist_points_loss = 100
+    dist_points_jacc = 100
+    """ class weight """
+    multiply = 10
+
+
+    mov_cost_val = calc_moving_avg(plot_cost, num_pts=num_pts, dist_points=dist_points_loss)
+    mov_jaccard = calc_moving_avg(plot_jaccard, num_pts=num_pts, dist_points=dist_points_jacc) 
+           
+    plot_single_cost(mov_cost_val, multiply, 'Training', 'Loss')    
+    plot_single_jacc(mov_jaccard, multiply, 'Training', 'Jaccard')
+
+    #mov_cost = calc_moving_avg(plot_cost, num_pts=num_pts, dist_points=dist_points)
+    mov_cost_val = calc_moving_avg(plot_cost_val, num_pts=num_pts, dist_points=dist_points_loss)
+    mov_jaccard = calc_moving_avg(plot_jaccard_val, num_pts=num_pts, dist_points=dist_points_jacc) 
+           
+    plot_single_cost(mov_cost_val, multiply, 'Validation', 'Loss')    
+    plot_single_jacc(mov_jaccard, multiply, 'Validation', 'Jaccard')
+
 
 """ Plot the average for the NEWEST MyQz11 + ClassW + No_W"""
 
@@ -393,7 +425,7 @@ def change_scale_plot2():
     multiply = 1500
     #mov_cost = calc_moving_avg(plot_cost, num_pts=num_pts, dist_points=dist_points)
     mov_cost_val = calc_moving_avg(plot_cost_val, num_pts=num_pts, dist_points=dist_points_loss)
-    mov_jaccard = calc_moving_avg(plot_jaccard, num_pts=num_pts, dist_points=dist_points_jacc) 
+    mov_jaccard = calc_moving_avg(plot_jaccard_val, num_pts=num_pts, dist_points=dist_points_jacc) 
            
     plot_single_cost(mov_cost_val, multiply, 'Validation class weight', 'Loss')    
     plot_single_jacc(mov_jaccard, multiply, 'Validation class weight', 'Jaccard')

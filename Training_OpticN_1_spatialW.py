@@ -364,7 +364,7 @@ for P in range(8000000000000000000000):
               save_pkl(input_counter, s_path, 'input_counter.pkl')   
                                             
               """Getting back the objects"""
-              #plot_cost = load_pkl(s_path, 'loss_global.pkl')
-              #plot_cost_val = load_pkl(s_path, 'loss_global_val.pkl')
-              #plot_jaccard = load_pkl(s_path, 'jaccard.pkl')
-              #plot_jaccard_val = load_pkl(s_path, 'jaccard_val.pkl')
+              plot_cost = load_pkl(s_path, 'loss_global.pkl')
+              plot_cost_val = load_pkl(s_path, 'loss_global_val.pkl')
+              plot_jaccard = load_pkl(s_path, 'jaccard.pkl')
+              plot_jaccard_val = load_pkl(s_path, 'jaccard_val.pkl')
