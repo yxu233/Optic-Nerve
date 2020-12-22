@@ -16,3 +16,11 @@ ON_4_analytic_results1) EAE_miR_4_jaune_Series006_z_input_stack_composite-PROJEC
 ON_4_analytic_results1) EAE_miR_4_jaune_Series006_z_input_stack_composite.tif
 ON_4_analytic_results1) EAE_miR_4_jaune_Series006_z_input_stack_surface_map-PROJECTION.tif
 ON_4_analytic_results1) EAE_miR_4_jaune_Series006_z_input_stack_surface_map.tif
+*.meta
+*.index
+*.data-00000-of-00001
+*.pkl
+*.png
+Checkpoints_old/2nd_OPTIC_NERVE_run_full_dataset/checkpoint
+Checkpoints_old/2nd_OPTIC_NERVE_run_CONTINUE_PATCHES/checkpoint
+Checkpoints_old/1st_OPTIC_NERVE_run_full_dataset_error_in_training_BAD_BACKGROUND_FOR_NEGs/checkpoint

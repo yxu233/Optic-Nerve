@@ -59,8 +59,13 @@ tf.set_random_seed(1); np.random.seed(1)
 """
 ## for saving
 #s_path = 'J:/DATA_2017-2018/Optic_nerve/EAE_miR_AAV2/2018.08.07/ON_11/Checkpoints/3rd_run_SHOWCASE/'
-s_path = './Checkpoints/2nd_OPTIC_NERVE_run_full_dataset/'
-num_check = 400000
+#s_path = './Checkpoints/2nd_OPTIC_NERVE_run_full_dataset/'
+
+s_path = './Checkpoints/2nd_OPTIC_NERVE_run_CONTINUE_PATCHES/'
+
+#num_check = 400000
+
+num_check = 200000
 #s_path = './Checkpoints/3rd_OPTIC_NERVE_large_network/'
 
 
@@ -119,6 +124,8 @@ while(another_folder == 'y'):
                                         title='Please select input directory')
     input_path = input_path + '/'
     
+    print('Do you want to select another folder? (y/n) then press Enter')
+    
     another_folder = input();   # currently hangs forever
     #another_folder = 'y';
 
@@ -166,6 +173,17 @@ for input_path in list_folder:
             input_name = examples[i]['input']
             input_im = np.asarray(Image.open(input_name), dtype=np.float32)
            
+            """ NEED TO CONVERT TO np.uint8 if the original input is np.uint16!!!"""
+            # NORMALIZED BECAUSE IMAGE IS uint16 ==> do same when actually running images!!!
+            input_im = np.asarray(Image.open(input_name))
+            if input_im.dtype == 'uint16':
+                input_im = np.asarray(input_im, dtype=np.float32)
+                input_im = cv.normalize(input_im, 0, 255, cv.NORM_MINMAX)
+                input_im = input_im * 255
+                
+            input_im = np.asarray(input_im, dtype= np.float32)
+            
+                    
             size_whole = input_im.shape[0]
             
             size = int(size_whole) # 4775 and 6157 for the newest one
@@ -173,7 +191,6 @@ for input_path in list_folder:
                 size = int((size * im_scale) / 0.45) # 4775 and 6157 for the newest one
                 input_im = resize_adaptive(Image.fromarray(input_im), size, method=Image.BICUBIC)
                 input_im = np.asarray(input_im, dtype=np.float32)
-
             
             # convert to single channel
             if len(input_im.shape) > 2:
@@ -184,7 +201,6 @@ for input_path in list_folder:
                 input_im = input_im / (input_im.max()/255)
             input_save = np.copy(input_im)
             
-            z
                            
             
             """ Divide input into patches if larger than tf_size, later put patches together
@@ -196,7 +212,7 @@ for input_path in list_folder:
                 patches = patchify(input_im, patch_shape=(tf_size,tf_size), overlap=10)
                 if not type(patches) is np.ndarray:
                     patches = np.array(patches)
-            elif input_im.shape[0] > tf_size or input_im.shape[1] > tf_size:
+            elif input_im.shape[0] < tf_size or input_im.shape[1] < tf_size:
                 
                 delta_w = tf_size - input_im.shape[0]
                 delta_h = tf_size - input_im.shape[1]
@@ -265,6 +281,8 @@ for input_path in list_folder:
                 (1) need to skip any patches that are empty to save time
                 (2) analyze each patch image individually, then recombine
             """
+            feed_dict = []
+            
             if patches.any():
                 seg_output_patches = np.zeros(np.shape(patches))
                 idx = 0
@@ -348,8 +366,8 @@ for input_path in list_folder:
             plt.close(2)
            
             """ Training Jaccard """
-            jacc_t = jaccard.eval(feed_dict=feed_dict)
-            plot_jaccard.append(jacc_t)           
+            #jacc_t = jaccard.eval(feed_dict=feed_dict)
+            ##plot_jaccard.append(jacc_t)           
                                   
             """ Plot outputs """
                          
@@ -364,7 +382,7 @@ for input_path in list_folder:
             filename_split = filename_split.split('.')[0]
                 
             plt.subplot(122); plt.imshow(seg_train); plt.title('Output');                            
-            plt.savefig(sav_dir + filename_split + '_' + str(i) + '_compare_output.png', bbox_inches='tight')
+            #plt.savefig(sav_dir + filename_split + '_' + str(i) + '_compare_output.png', bbox_inches='tight')
                   
             batch_x = []; batch_y = []; weights = [];
                   
@@ -374,14 +392,17 @@ for input_path in list_folder:
     
             """ Save as 3D stack """
             if len(output_stack) == 0:
-                output_stack = seg_train
-                #output_stack_masked = seg_train_masked
-                input_im_stack = input_save
+                 output_stack = seg_train
+                 #output_stack_masked = seg_train_masked
+                 input_im_stack = input_save
             else:
-                output_stack = np.dstack([output_stack, seg_train])
-                #output_stack_masked = np.dstack([output_stack_masked, seg_train_masked])
-                input_im_stack = np.dstack([input_im_stack, input_save])
+                 output_stack = np.dstack([output_stack, seg_train])
+                 #output_stack_masked = np.dstack([output_stack_masked, seg_train_masked])
+                 input_im_stack = np.dstack([input_im_stack, input_save])
     
+            # """ save individual tiffs as well """    
+            # plt.imsave(sav_dir + filename_split + '_' + str(i) + '_input_im.tiff', (input_save))
+            # plt.imsave(sav_dir + filename_split + '_' + str(i) + '_output_seg.tiff', (seg_train))
      
      
             if i % 20 == 0 and i != 0:
@@ -392,7 +413,7 @@ for input_path in list_folder:
                   
               """ Post-processing """
               """ (1) removes all things that do not appear in > 5 slices!!!"""
-              all_seg, all_blebs, all_eliminated = slice_thresh(output_stack, slice_size=5)
+              all_seg, all_blebs, all_eliminated = slice_thresh(output_stack, slice_size=4)
               
               filename_split = filename_split.split('_z')[0]
               
@@ -411,35 +432,35 @@ for input_path in list_folder:
               blebs_opened_masked = cv.morphologyEx(np.asarray(mask, dtype=np.uint8), cv.MORPH_CLOSE, kernel)
               
               """ apply slice THRESH again"""
-              all_seg_THRESH, all_blebs_THRESH, all_eliminated_THRESH = slice_thresh(blebs_opened_masked, slice_size=5)
+              all_seg_THRESH, all_blebs_THRESH, all_eliminated_THRESH = slice_thresh(blebs_opened_masked, slice_size=4)
               
               """ (3) Find vectors of movement and eliminate blobs that migrate """
-              final_bleb_matrix, elim_matrix = distance_thresh(all_blebs_THRESH, average_thresh=15, max_thresh=15)
+              final_bleb_matrix, elim_matrix = distance_thresh(all_blebs_THRESH, average_thresh=10, max_thresh=10)
               
               
               print("Saving input images")
               input_im_stack_m_tiffs = convert_matrix_to_multipage_tiff(save_input_im_stack)
-              imsave(sav_dir + "1) " +  filename_split + '_z' + '_input_stack.tif', input_im_stack_m_tiffs)
+              imsave(sav_dir + "1) " +  filename_split + '_z' + str(int(i/20)) + '_input_stack.tif', input_im_stack_m_tiffs)
               
               print("Saving post-processed slice threshed images")
               all_seg_m_tiffs = convert_matrix_to_multipage_tiff(all_seg)
-              imsave(sav_dir + "2) " + filename_split + '_z' + '_ORIGINAL_post-processed.tif', all_seg_m_tiffs)
+              imsave(sav_dir + "2) " + filename_split + '_z' + str(int(i/20)) +'_ORIGINAL_post-processed.tif', all_seg_m_tiffs)
               all_blebs_m_tiffs = convert_matrix_to_multipage_tiff(all_blebs)
-              imsave(sav_dir + "3) " + filename_split + '_z' + '_BLEBS_post-processed.tif', all_blebs_m_tiffs)
+              imsave(sav_dir + "3) " + filename_split + '_z' + str(int(i/20)) +'_BLEBS_post-processed.tif', all_blebs_m_tiffs)
               all_eliminated_m_tiffs = convert_matrix_to_multipage_tiff(all_eliminated)
-              imsave(sav_dir + "4) " + filename_split + '_z' + '_ELIM_post-processed.tif', all_eliminated_m_tiffs)
+              imsave(sav_dir + "4) " + filename_split + '_z' + str(int(i/20)) +'_ELIM_post-processed.tif', all_eliminated_m_tiffs)
               
               
               print("Saving post-processed intensity threshed images")
               all_blebs_THRESH_m_tiffs = convert_matrix_to_multipage_tiff(all_blebs_THRESH)
-              imsave(sav_dir + "5) " + filename_split + '_z' + '_THRESH_and_SLICED_post-processed.tif', all_blebs_THRESH_m_tiffs)
+              imsave(sav_dir + "5) " + filename_split + '_z' + str(int(i/20)) +'_THRESH_and_SLICED_post-processed.tif', all_blebs_THRESH_m_tiffs)
               
               
               print("Saving post-processed distance thresheded images")
               final_bleb_m_tiffs = convert_matrix_to_multipage_tiff(final_bleb_matrix)
-              imsave(sav_dir + "6) " + filename_split + '_z' + '_DISTANCE_THRESHED_post-processed.tif', final_bleb_m_tiffs)
+              imsave(sav_dir + "6) " + filename_split + '_z' + str(int(i/20)) +'_DISTANCE_THRESHED_post-processed.tif', final_bleb_m_tiffs)
               elim_matrix_m_tiffs = convert_matrix_to_multipage_tiff(elim_matrix)
-              imsave(sav_dir + "7) " + filename_split + '_z' + '_DISTANCE_THRESHED_elimed_post-processed.tif', elim_matrix_m_tiffs)
+              imsave(sav_dir + "7) " + filename_split + '_z' + str(int(i/20)) +'_DISTANCE_THRESHED_elimed_post-processed.tif', elim_matrix_m_tiffs)
               
               
           
@@ -458,3 +479,84 @@ for input_path in list_folder:
               output_stack_masked = [];
               all_PPV = [];
               input_im_stack = save_input_im_stack;
+              
+              
+              
+    #    """ Plotting as interactive scroller """
+    #    fig, ax = plt.subplots(1, 1)
+    #    tracker = IndexTracker(ax, final_bleb_matrix)
+    #    fig.canvas.mpl_connect('scroll_event', tracker.onscroll)
+    #    plt.show()
+     
+    """ Pre-processing """
+    # 1) get more data (and good data)
+    # 2) overlay seg masks and binarize to get better segmentations???
+        
+    """ Post-processing """
+    """ (1) removes all things that do not appear in > 5 slices!!!"""
+    all_seg, all_blebs, all_eliminated = slice_thresh(output_stack, slice_size=4)
+    
+    filename_split = filename_split.split('_z')[0]
+         
+    """ (2) DO THRESHOLDING TO SHRINK SEGMENTATION SIZE, but do THRESH ON 3D array!!! """
+    save_input_im_stack = np.copy(input_im_stack)
+    input_im_stack = input_im_stack[:, :, 0: len(all_blebs[1, 1, :])]
+    input_im_stack[all_blebs == 0] = 0     # FIRST MASK THE ORIGINAL IMAGE
+         
+    # then do thresholding
+    from skimage import filters
+    val = filters.threshold_otsu(input_im_stack)
+    mask = input_im_stack > val
+         
+    # closes image to make less noisy """
+    kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE,(3,3))
+    blebs_opened_masked = cv.morphologyEx(np.asarray(mask, dtype=np.uint8), cv.MORPH_CLOSE, kernel)
+         
+    """ apply slice THRESH again"""
+    all_seg_THRESH, all_blebs_THRESH, all_eliminated_THRESH = slice_thresh(blebs_opened_masked, slice_size=4)
+         
+    """ (3) Find vectors of movement and eliminate blobs that migrate """
+    final_bleb_matrix, elim_matrix = distance_thresh(all_blebs_THRESH, average_thresh=10, max_thresh=10)
+    
+         
+    print("Saving input images")
+    input_im_stack_m_tiffs = convert_matrix_to_multipage_tiff(save_input_im_stack)
+    imsave(sav_dir + "1) " +  filename_split + '_z' + str(int(i/20)) + '_input_stack.tif', input_im_stack_m_tiffs)
+         
+    print("Saving post-processed slice threshed images")
+    all_seg_m_tiffs = convert_matrix_to_multipage_tiff(all_seg)
+    imsave(sav_dir + "2) " + filename_split + '_z' + str(int(i/20)) +'_ORIGINAL_post-processed.tif', all_seg_m_tiffs)
+    all_blebs_m_tiffs = convert_matrix_to_multipage_tiff(all_blebs)
+    imsave(sav_dir + "3) " + filename_split + '_z' + str(int(i/20)) +'_BLEBS_post-processed.tif', all_blebs_m_tiffs)
+    all_eliminated_m_tiffs = convert_matrix_to_multipage_tiff(all_eliminated)
+    imsave(sav_dir + "4) " + filename_split + '_z' + str(int(i/20)) +'_ELIM_post-processed.tif', all_eliminated_m_tiffs)
+         
+         
+    print("Saving post-processed intensity threshed images")
+    all_blebs_THRESH_m_tiffs = convert_matrix_to_multipage_tiff(all_blebs_THRESH)
+    imsave(sav_dir + "5) " + filename_split + '_z' + str(int(i/20)) +'_THRESH_and_SLICED_post-processed.tif', all_blebs_THRESH_m_tiffs)
+         
+         
+    print("Saving post-processed distance thresheded images")
+    final_bleb_m_tiffs = convert_matrix_to_multipage_tiff(final_bleb_matrix)
+    imsave(sav_dir + "6) " + filename_split + '_z' + str(int(i/20)) +'_DISTANCE_THRESHED_post-processed.tif', final_bleb_m_tiffs)
+    elim_matrix_m_tiffs = convert_matrix_to_multipage_tiff(elim_matrix)
+    imsave(sav_dir + "7) " + filename_split + '_z' + str(int(i/20)) +'_DISTANCE_THRESHED_elimed_post-processed.tif', elim_matrix_m_tiffs)
+    
+         
+     
+    input_im_stack_m_tiffs = [];
+    all_seg_m_tiffs = [];
+    all_blebs_m_tiffs = [];
+    all_eliminated_m_tiffs = [];
+    all_blebs_THRESH_m_tiffs = [];
+    final_bleb_m_tiffs = [];
+    final_bleb_m_tiffs = [];
+    elim_matrix_m_tiffs = [];
+    
+        
+    plot_jaccard = [];
+    output_stack = [];
+    output_stack_masked = [];
+    all_PPV = [];
+    input_im_stack = save_input_im_stack;

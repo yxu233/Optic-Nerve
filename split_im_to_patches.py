@@ -8,7 +8,6 @@ Created on Wed Apr 17 11:34:33 2019
 import time
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
-from scipy.misc import imread, imsave, imresize
 
 
 # the code produces read-only view of an image in 0.015s

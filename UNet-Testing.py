@@ -124,6 +124,8 @@ while(another_folder == 'y'):
                                         title='Please select input directory')
     input_path = input_path + '/'
     
+    print('Do you want to select another folder? (y/n) then press Enter')
+    
     another_folder = input();   # currently hangs forever
     #another_folder = 'y';
 
@@ -379,8 +381,8 @@ for input_path in list_folder:
             filename_split = input_name.split('\\')[-1]
             filename_split = filename_split.split('.')[0]
                 
-            plt.subplot(122); plt.imshow(seg_train); plt.title('Output');                            
-            plt.savefig(sav_dir + filename_split + '_' + str(i) + '_compare_output.png', bbox_inches='tight')
+            #plt.subplot(122); plt.imshow(seg_train); plt.title('Output');                            
+            #plt.savefig(sav_dir + filename_split + '_' + str(i) + '_compare_output.png', bbox_inches='tight')
                   
             batch_x = []; batch_y = []; weights = [];
                   
@@ -433,16 +435,16 @@ for input_path in list_folder:
             if len(output_stack) == 0:
                 output_stack = seg_train
                 #output_stack_masked = seg_train_masked
-                input_im_stack = input_save
+                input_im_stack = input_save[:, :, 1]
             else:
                 """ Keep this if want to keep all the outputs as single stack """
-                #output_stack = np.dstack([output_stack, seg_train])
+                output_stack = np.dstack([output_stack, seg_train])
                 ##output_stack_masked = np.dstack([output_stack_masked, seg_train_masked])
-                #input_im_stack = np.dstack([input_im_stack, input_save])
+                input_im_stack = np.dstack([input_im_stack, input_save[:, :, 1]])
 
             """ save individual tiffs as well """    
-            plt.imsave(sav_dir + filename_split + '_' + str(i) + '_input_im.tif', (input_save))
-            plt.imsave(sav_dir + filename_split + '_' + str(i) + '_output_seg.tif', (seg_train))
+            # plt.imsave(sav_dir + filename_split + '_' + str(i) + '_input_im.tif', (input_save))
+            # plt.imsave(sav_dir + filename_split + '_' + str(i) + '_output_seg.tif', (seg_train))
             
     
     
@@ -483,23 +485,23 @@ for input_path in list_folder:
     
     print("Saving post-processed slice threshed images")
     all_seg_m_tiffs = convert_matrix_to_multipage_tiff(all_seg)
-    imsave(sav_dir + "2) " + filename_split + '_z' + '_ORIGINAL_post-processed.tif', all_seg_m_tiffs)
+    #imsave(sav_dir + "2) " + filename_split + '_z' + '_ORIGINAL_post-processed.tif', all_seg_m_tiffs)
     all_blebs_m_tiffs = convert_matrix_to_multipage_tiff(all_blebs)
-    imsave(sav_dir + "3) " + filename_split + '_z' + '_BLEBS_post-processed.tif', all_blebs_m_tiffs)
+    #imsave(sav_dir + "3) " + filename_split + '_z' + '_BLEBS_post-processed.tif', all_blebs_m_tiffs)
     all_eliminated_m_tiffs = convert_matrix_to_multipage_tiff(all_eliminated)
-    imsave(sav_dir + "4) " + filename_split + '_z' + '_ELIM_post-processed.tif', all_eliminated_m_tiffs)
+    #imsave(sav_dir + "4) " + filename_split + '_z' + '_ELIM_post-processed.tif', all_eliminated_m_tiffs)
     
     
     print("Saving post-processed intensity threshed images")
     all_blebs_THRESH_m_tiffs = convert_matrix_to_multipage_tiff(all_blebs_THRESH)
-    imsave(sav_dir + "5) " + filename_split + '_z' + '_THRESH_and_SLICED_post-processed.tif', all_blebs_THRESH_m_tiffs)
+    #imsave(sav_dir + "5) " + filename_split + '_z' + '_THRESH_and_SLICED_post-processed.tif', all_blebs_THRESH_m_tiffs)
     
     
     print("Saving post-processed distance thresheded images")
     final_bleb_m_tiffs = convert_matrix_to_multipage_tiff(final_bleb_matrix)
     imsave(sav_dir + "6) " + filename_split + '_z' + '_DISTANCE_THRESHED_post-processed.tif', final_bleb_m_tiffs)
     elim_matrix_m_tiffs = convert_matrix_to_multipage_tiff(elim_matrix)
-    imsave(sav_dir + "7) " + filename_split + '_z' + '_DISTANCE_THRESHED_elimed_post-processed.tif', elim_matrix_m_tiffs)
+    #imsave(sav_dir + "7) " + filename_split + '_z' + '_DISTANCE_THRESHED_elimed_post-processed.tif', elim_matrix_m_tiffs)
     
     
         

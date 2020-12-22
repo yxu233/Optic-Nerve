@@ -50,7 +50,7 @@ all_F1 = []
 all_sens = []
 all_blebs_ground = 0
 all_blebs_compare = 0
-thresh_min_bleb_size = 0
+thresh_min_bleb_size = 100  # normally 100?
 for i in range(0, len(examples), 2):
      
      input_name_1 = examples[i + 1]['input']
@@ -58,7 +58,7 @@ for i in range(0, len(examples), 2):
      input_1[input_1 > 0] = 1
      
      
-     input_name_2 = examples[i ]['input']
+     input_name_2 = examples[i]['input']
      input_2 = np.asarray(Image.open(input_name_2), dtype=np.float32)  
      input_2[input_2 > 0] = 1
      
